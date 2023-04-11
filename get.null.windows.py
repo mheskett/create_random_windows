@@ -11,11 +11,13 @@ import scipy.stats
 import multiprocessing as mp
 import random
 import json
+import seaborn as sns
 
 
 ### all files needed
 fasta_fai = "/Users/heskett/breast.fragile.sites/reference_files/genome.fa.fai"
 blacklist = "/Users/heskett/breast.fragile.sites/reference_files/hg19-blacklist.v2.bed"
+genome_fasta = "/Users/heskett/breast.fragile.sites/reference_files/genome.fa"
 ###
 
 
@@ -41,9 +43,30 @@ def random_windows(length,number, write_file=False, file_path=None):
     return windows
 
 
-def filter_windows(windows):
+def remove_blacklist(windows):
     blacklist = pybedtools.BedTool(blacklist)
     windows = windows.subtract(blacklist,A=True)
 
     return windows
+
+def calculate_gc(windows):
+    ### names=["#1_usercol", "2_usercol", "3_usercol",  "4_pct_at",  "5_pct_gc",  "6_num_A",    "7_num_C",  "8_num_G",  "9_num_T",   "10_num_N",  "11_num_oth",  "12_seq_len"]
+    windows_nuc = windows.nucleotide_content(fi=genome_fasta)
+    windows_nuc_df = windows_nuc.to_dataframe(names=["#1_usercol", "2_usercol", "3_usercol",  "4_pct_at",  "5_pct_gc",  "6_num_A",    "7_num_C",  "8_num_G",  "9_num_T",   "10_num_N",  "11_num_oth",  "12_seq_len"],
+
+        disable_auto_names=True,header=None).drop(index=0)
+    print(windows_nuc_df)
+    plt.figure()
+    sns.kdeplot([float(x) for x in windows_nuc_df["5_pct_gc"]],clip=(0,1))
+    plt.xlim([0.2,0.91])
+    plt.xticks([0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+    plt.savefig("test.pdf")
+    return
+
+
+calculate_gc(pybedtools.BedTool("/Users/heskett/breast.fragile.sites/reference_files/test.bed"))
+
+
+
+
 
