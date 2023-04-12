@@ -19,7 +19,9 @@ fasta_fai = "/Users/heskett/breast.fragile.sites/reference_files/genome.fa.fai"
 blacklist_file = "/Users/heskett/breast.fragile.sites/reference_files/hg19-blacklist.v2.bed"
 genome_fasta = "/Users/heskett/breast.fragile.sites/reference_files/genome.fa"
 common_snps = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.common.snps.nochr.bed"
-
+repeats_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.repeats.hg19.nochr.bed"
+dead_zones_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ncbi.dead.zones.nochr.bed"
+problematic_regions_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.problematic.nochr.bed"
 ###
 
 
@@ -41,13 +43,18 @@ def sample_windows(number, window_object, fraction_windows=None, window_file=Non
 def random_windows(length,number, write_file=False, file_path=None):
     a=pybedtools.BedTool()
     windows = a.random(l=length, n=number, g=fasta_fai)
+    ## this returns (chr start stop number index, length, random strand.)
+    print(windows)
 
     return windows
 
 
 def remove_blacklist(windows):
     blacklist = pybedtools.BedTool(blacklist_file)
-    windows = windows.subtract(blacklist, A=True)
+    problematic_regions = pybedtools.BedTool(problematic_regions_file)
+    dead_zones = pybedtools.BedTool(dead_zones_file)
+    windows = windows.subtract(blacklist, A=True).subtract(problematic_regions,A=True).subtract(dead_zones,A=True)
+    print(windows)
 
     return windows
 
@@ -86,11 +93,21 @@ def common_snp_density(windows):
     return
 
 
-#calculate_gc(remove_blacklist(random_windows(100000,1000))) # dont forget random seeds
+def fraction_repeats(windows):
+    repeats = pybedtools.BedTool(repeats_file)
+    windows_repeats_df = windows.coverage(repeats).to_dataframe(disable_auto_names=True,header=None)
+    last_col=len(windows_repeats_df)-1
+    print(windows_repeats_df)
+    plt.figure()
+    sns.kdeplot(windows_repeats_df[9], clip=(0, 1),label="fraction_repeats")
+    plt.xlim([0,1])
+    plt.xticks([0,0.2,0.4,0.6,0.8,1])
+    plt.suptitle("Fraction_Repeat_Sequence")
+    plt.savefig("fraction_Repeat_sequence.pdf")
+    return
 
+random_windows(100000,1000) # dont forget random seed
 #calculate_gc(pybedtools.BedTool("/Users/heskett/breast.fragile.sites/reference_files/test.bed"))
-
-
-common_snp_density(random_windows(20000,500))
-
+#common_snp_density(random_windows(20000,500))
+#fraction_repeats(random_windows(20000,500))
 
