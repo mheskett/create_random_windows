@@ -59,6 +59,44 @@ def calculate_gc(windows):
     return windows_nuc
 
 
+def add_gc(df):
+    # start and end with pandas DFs
+    """
+    Output format: 
+            The following information will be reported after each BED entry:
+                1) %AT content
+                2) %GC content
+                3) Number of As observed
+                4) Number of Cs observed
+                5) Number of Gs observed
+                6) Number of Ts observed
+                7) Number of Ns observed
+                8) Number of other bases observed
+                9) The length of the explored sequence/interval.
+                10) The seq. extracted from the FASTA file. (opt., if -seq is used)
+                11) The number of times a user's pattern was observed.
+                    (opt., if -pattern is used.)
+    """
+    a = pybedtools.BedTool.from_dataframe(df)
+    num_cols=len(df.columns)
+    # get nuc content, which is added to the second extra column. so get that column and add it to origianl DF.
+    tmp = a.nucleotide_content(fi=genome_fasta).to_dataframe(disable_auto_names=True, header=None).drop(0).reset_index(drop=True)
+    df["percent_gc"] = tmp[num_cols+1]
+
+    return df # returns ANY bed style DF with an added column for %GC
+
+
+def add_common_snp_density(df):
+    windows = pybedtools.BedTool.from_dataframe(df)
+    num_cols=len(df.columns)
+    snps = pybedtools.BedTool(common_snps)
+    windows_snps = windows.intersect(snps, c=True)
+    window_snps_df = windows_snps.to_dataframe(disable_auto_names=True,header=None)
+    df["snps_per_kb"] = window_snps_df[num_cols].astype(int) / ((window_snps_df[2].astype(int) - window_snps_df[1].astype(int)) / 1000)
+    
+    return df
+
+
 def common_snp_density(windows):
     num_cols = len(windows.to_dataframe().columns)
 
@@ -173,18 +211,21 @@ if __name__ == "__main__":
 
     arguments = parser.parse_args()
 
-
-    if arguments.bed:
-        input_file = pybedtools.BedTool(arguments.bed)
-        # return all the stats
-        fraction_coding(input_file)
-        fraction_repeats(input_file)
-        common_snp_density(input_file)
-        calculate_gc(input_file)
-    else:
-
-        my_windows = remove_blacklist(random_windows(length=arguments.length_windows,number=arguments.num_windows*2))
-        print(my_windows.to_dataframe(disable_auto_names=True,header=None).sample(n=arguments.num_windows))
+    # print(random_windows(50000,5000).to_dataframe(disable_auto_names=True, header=None))
+    # print(add_gc(random_windows(50000,5000).to_dataframe(disable_auto_names=True, header=None)))
+    add_common_snp_density(random_windows(50000,5000).to_dataframe(disable_auto_names=True, header=None))
+    # if arguments.bed:
+    #     input_file = pybedtools.BedTool(arguments.bed)
+    #     # return all the stats
+    #     fraction_coding(input_file)
+    #     fraction_repeats(input_file)
+    #     common_snp_density(input_file)
+    #     calculate_gc(input_file)
+    # else:
+    #     ## probably need to generate a big pandas DF with all the stats as columns, and then
+    #     ## use pandas statements to remove the extremes or select for certain stats
+    #     my_windows = remove_blacklist(random_windows(length=arguments.length_windows,number=arguments.num_windows*1.5))
+    #     print(my_windows.to_dataframe(disable_auto_names=True, header=None).sample(n=arguments.num_windows))
 
 
 
@@ -201,7 +242,6 @@ if __name__ == "__main__":
 #fraction_coding(random_windows(50000,5000))
 
 ## main program should get stats for a list of windows and then allow you to put in similar stats to make new windows
-
 
 
 
