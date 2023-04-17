@@ -38,6 +38,20 @@ def filter_df(df, snps_min=0,
                 fraction_within_coding_genes_min=0,
                 fraction_within_coding_genes_max=1):
 
+    if snps_min > snps_max:
+        print("error in snps argument")
+        return
+    if percent_gc_min > percent_gc_max:
+        print("error in gc argument")
+        return
+    if fraction_repeats_min > fraction_repeats_max:
+        print("error in repeats argument")
+        return
+    if fraction_within_coding_genes_min > fraction_within_coding_genes_max:
+        print("error in coding genes argument")
+        return
+
+
     tmp = df[(df["snps_per_kb"].astype(float) >= snps_min) & 
             (df["snps_per_kb"].astype(float) <= snps_max) & 
             (df["percent_gc"].astype(float) >= percent_gc_min) & 
@@ -121,7 +135,7 @@ def add_gc(df):
     tmp = a.nucleotide_content(fi=genome_fasta).to_dataframe(disable_auto_names=True, header=None).drop(0).reset_index(drop=True)
     df["percent_gc"] = tmp[num_cols+1]
 
-    return df # returns ANY bed style DF with an added column for %GC
+    return df
 
 
 def add_common_snp_density(df):
@@ -218,75 +232,70 @@ if __name__ == "__main__":
        type=str,
        metavar="[bed file input. no header.]",
        required=False,
-       help="")
+       help="input bed file to plot genome features distributions")
     parser.add_argument("--out_file",
        type=str,
        metavar="[out file]",
        required=True,
        help="full path to output results")
-    parser.add_argument("--make_windows",
-       type=str,
-       metavar="[make windows or no]",
-       required=False,
-       help="")
     parser.add_argument("--gc_min",
        type=float,
        metavar="[min fraction of gc]",
        required=False,
        default=0,
-       help="")
+       help="min gc%")
     parser.add_argument("--gc_max",
        type=float,
        metavar="[max fraction of gc]",
        required=False,
        default=1,
-       help="")
+       help="max gc%")
     parser.add_argument("--repeats_min",
        type=float,
        metavar="[min fraction of repeats]",
        required=False,
        default=0,
-       help="")
+       help="min fraction of repeat derived sequence")
     parser.add_argument("--repeats_max",
        type=float,
        metavar="[max fraction of repeats]",
        required=False,
        default=1,
-       help="")
+       help="max fraction of repeat derived sequence")
     parser.add_argument("--snps_per_kb_min",
        type=float,
        metavar="[min fraction of common snps per kb]",
        required=False,
        default=0,
-       help="")
+       help="min snps per kb")
     parser.add_argument("--snps_per_kb_max",
        type=float,
        metavar="[max fraction of common snps per kb]",
        required=False,
        default=1000,
-       help="")
+       help="max snps per kb")
     parser.add_argument("--gene_fraction_min",
        type=float,
        metavar="[min fractino of genes in windows allowed]",
        required=False,
        default=0,
-       help="")
+       help="min fraction of whole gene sequence")
     parser.add_argument("--gene_fraction_max",
        type=float,
        metavar="[max fraction of genes in windows allowed]",
        required=False,
        default=1,
-       help="")
+       help="max fraction of whole gene sequence")
     parser.add_argument("--num_windows",
        type=int,
        metavar="[number of windows wanted]",
        required=False,
-       help="")
+       help="number of desired windows")
     parser.add_argument("--length_windows",
        type=int,
        metavar="[length of windows wanted]",
        required=False,
-       help="")   
+       help="length of windows desired")   
 
     arguments = parser.parse_args()
 
@@ -296,7 +305,7 @@ if __name__ == "__main__":
     ##
     ##
     if arguments.bed == None:
-        num_windows_to_try = arguments.num_windows*1.5
+        num_windows_to_try = arguments.num_windows*2
         windows_unfiltered = clean_df(
                                 add_fraction_coding(
                                 add_fraction_repeats(
@@ -316,7 +325,7 @@ if __name__ == "__main__":
         
         while len(windows_filtered.index) < arguments.num_windows:
 
-            num_windows_to_try = num_windows_to_try*2
+            num_windows_to_try = num_windows_to_try*3
 
             windows_unfiltered = clean_df(
                                 add_fraction_coding(
@@ -325,7 +334,7 @@ if __name__ == "__main__":
                                 add_common_snp_density(
                                 remove_blacklist(
                                 random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None))))))
-
+            print(windows_unfiltered)
             windows_filtered = filter_df(windows_unfiltered,
                                     snps_min=arguments.snps_per_kb_min,
                                     snps_max=arguments.snps_per_kb_max,
@@ -335,13 +344,12 @@ if __name__ == "__main__":
                                     fraction_repeats_max=arguments.repeats_max,
                                     fraction_within_coding_genes_min=arguments.gene_fraction_min,
                                     fraction_within_coding_genes_max=arguments.gene_fraction_max)
+            print(windows_filtered)
 
         final = sample_df(windows_filtered,num=arguments.num_windows)
         write_df(final)
 
-
-
-
+    ### this section for makingm plots of a user given bed file of windows
     if arguments.bed:
         input_file = pybedtools.BedTool(arguments.bed)
         # Make plots. Can add more stats to plots
