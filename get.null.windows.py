@@ -5,14 +5,10 @@ import pandas as pd
 import sys
 import matplotlib.pyplot as plt
 import pybedtools
-import re
-import time
 import scipy.stats
-import multiprocessing as mp
 import random
-import json
-import seaborn as sns
 import argparse
+import seaborn as sns
 
 ### all files needed
 fasta_fai = "/Users/heskett/breast.fragile.sites/reference_files/genome.fa.fai"
@@ -33,12 +29,33 @@ def clean_df(df):
 
     return tmp.reset_index(drop=True)
 
-def filter_df(df,snps_min=0,snps_max=100,percent_gc_min=0,percent_gc_max=1,fraction_repeats_min=0,
-            fraction_repeats_max=1,fraction_within_coding_genes_min=0,fraction_within_coding_genes_max=1):
+def filter_df(df, snps_min=0,
+                snps_max=100,
+                percent_gc_min=0,
+                percent_gc_max=1,
+                fraction_repeats_min=0,
+                fraction_repeats_max=1,
+                fraction_within_coding_genes_min=0,
+                fraction_within_coding_genes_max=1):
 
+    tmp = df[(df["snps_per_kb"].astype(float) >= snps_min) & 
+            (df["snps_per_kb"].astype(float) <= snps_max) & 
+            (df["percent_gc"].astype(float) >= percent_gc_min) & 
+            (df["percent_gc"].astype(float) <= percent_gc_max) &
+            (df["fraction_repeats"].astype(float) >= fraction_repeats_min) &
+            (df["fraction_repeats"].astype(float) <= fraction_repeats_max) &
+            (df["fraction_within_coding_genes"].astype(float) >= fraction_within_coding_genes_min) & 
+            (df["fraction_within_coding_genes"].astype(float) <= fraction_within_coding_genes_max) ]
 
+    return tmp
 
-    return df
+def sample_df(df,num):
+
+    if num >= len(df.index):
+        print("ERROR: asking for fewer rows than exist in the data frame")
+        return 
+
+    return df.sample(n=num)
 
 
 def write_df(df):
@@ -216,31 +233,49 @@ if __name__ == "__main__":
        type=float,
        metavar="[min fraction of gc]",
        required=False,
+       default=0,
        help="")
     parser.add_argument("--gc_max",
        type=float,
        metavar="[max fraction of gc]",
        required=False,
+       default=1,
        help="")
     parser.add_argument("--repeats_min",
        type=float,
        metavar="[min fraction of repeats]",
        required=False,
+       default=0,
        help="")
     parser.add_argument("--repeats_max",
        type=float,
        metavar="[max fraction of repeats]",
        required=False,
+       default=1,
+       help="")
+    parser.add_argument("--snps_per_kb_min",
+       type=float,
+       metavar="[min fraction of common snps per kb]",
+       required=False,
+       default=0,
+       help="")
+    parser.add_argument("--snps_per_kb_max",
+       type=float,
+       metavar="[max fraction of common snps per kb]",
+       required=False,
+       default=1000,
        help="")
     parser.add_argument("--gene_fraction_min",
        type=float,
        metavar="[min fractino of genes in windows allowed]",
        required=False,
+       default=0,
        help="")
     parser.add_argument("--gene_fraction_max",
        type=float,
        metavar="[max fraction of genes in windows allowed]",
        required=False,
+       default=1,
        help="")
     parser.add_argument("--num_windows",
        type=int,
@@ -255,37 +290,63 @@ if __name__ == "__main__":
 
     arguments = parser.parse_args()
 
-    # print(random_windows(50000,5000).to_dataframe(disable_auto_names=True, header=None))
-    # print(add_gc(random_windows(50000,5000).to_dataframe(disable_auto_names=True, header=None)))
-    write_df(clean_df(add_fraction_coding(add_fraction_repeats(add_gc(add_common_snp_density(remove_blacklist(random_windows(50000,5000)).to_dataframe(disable_auto_names=True, header=None)))))))
-    # if arguments.bed:
-    #     input_file = pybedtools.BedTool(arguments.bed)
-    #     # return all the stats
-    #     fraction_coding(input_file)
-    #     fraction_repeats(input_file)
-    #     common_snp_density(input_file)
-    #     calculate_gc(input_file)
-    # else:
-    #     ## probably need to generate a big pandas DF with all the stats as columns, and then
-    #     ## use pandas statements to remove the extremes or select for certain stats
-    #     my_windows = remove_blacklist(random_windows(length=arguments.length_windows,number=arguments.num_windows*1.5))
-    #     print(my_windows.to_dataframe(disable_auto_names=True, header=None).sample(n=arguments.num_windows))
+
+
+    ## MAIN PROG. Do this if no user bed file is provided.
+    ##
+    ##
+    if arguments.bed == None:
+        num_windows_to_try = arguments.num_windows*1.5
+        windows_unfiltered = clean_df(
+                                add_fraction_coding(
+                                add_fraction_repeats(
+                                add_gc(
+                                add_common_snp_density(
+                                remove_blacklist(
+                                random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None))))))
+        windows_filtered = filter_df(windows_unfiltered,
+                                    snps_min=arguments.snps_per_kb_min,
+                                    snps_max=arguments.snps_per_kb_max,
+                                    percent_gc_min=arguments.gc_min,
+                                    percent_gc_max=arguments.gc_max,
+                                    fraction_repeats_min=arguments.repeats_min,
+                                    fraction_repeats_max=arguments.repeats_max,
+                                    fraction_within_coding_genes_min=arguments.gene_fraction_min,
+                                    fraction_within_coding_genes_max=arguments.gene_fraction_max)
+        
+        while len(windows_filtered.index) < arguments.num_windows:
+
+            num_windows_to_try = num_windows_to_try*2
+
+            windows_unfiltered = clean_df(
+                                add_fraction_coding(
+                                add_fraction_repeats(
+                                add_gc(
+                                add_common_snp_density(
+                                remove_blacklist(
+                                random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None))))))
+
+            windows_filtered = filter_df(windows_unfiltered,
+                                    snps_min=arguments.snps_per_kb_min,
+                                    snps_max=arguments.snps_per_kb_max,
+                                    percent_gc_min=arguments.gc_min,
+                                    percent_gc_max=arguments.gc_max,
+                                    fraction_repeats_min=arguments.repeats_min,
+                                    fraction_repeats_max=arguments.repeats_max,
+                                    fraction_within_coding_genes_min=arguments.gene_fraction_min,
+                                    fraction_within_coding_genes_max=arguments.gene_fraction_max)
+
+        final = sample_df(windows_filtered,num=arguments.num_windows)
+        write_df(final)
 
 
 
 
-
-
-
-
-
-
-# common_snp_density(fraction_repeats(calculate_gc(remove_blacklist(random_windows(10000,1000))))) # dont forget random seed)
-#common_snp_density(random_windows(20000,500))
-#fraction_repeats(random_windows(20000,500))
-#fraction_coding(random_windows(50000,5000))
-
-## main program should get stats for a list of windows and then allow you to put in similar stats to make new windows
-
-
+    if arguments.bed:
+        input_file = pybedtools.BedTool(arguments.bed)
+        # Make plots. Can add more stats to plots
+        fraction_coding(input_file)
+        fraction_repeats(input_file)
+        common_snp_density(input_file)
+        calculate_gc(input_file)
 
