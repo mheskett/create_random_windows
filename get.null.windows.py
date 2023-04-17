@@ -25,6 +25,28 @@ problematic_regions_file = "/Users/heskett/breast.fragile.sites/reference_files/
 whole_genes_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ensemble.coding.whole.genes.bed" ### includes introns and exons of coding genes only
 ###
 
+
+def clean_df(df):
+
+    tmp = df.loc[:,[0,1,2,"snps_per_kb","percent_gc","fraction_repeats","fraction_within_coding_genes"]]
+    tmp.columns = ["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats","fraction_within_coding_genes"]
+
+    return tmp.reset_index(drop=True)
+
+def filter_df(df,snps_min=0,snps_max=100,percent_gc_min=0,percent_gc_max=1,fraction_repeats_min=0,
+            fraction_repeats_max=1,fraction_within_coding_genes_min=0,fraction_within_coding_genes_max=1):
+
+
+
+    return df
+
+
+def write_df(df):
+
+    df.to_csv(arguments.out_file,sep="\t",index=False,header=True)
+
+    return
+
 def random_windows(length,number, write_file=False, file_path=None):
     a=pybedtools.BedTool()
     windows = a.random(l=length, n=number, g=fasta_fai)
@@ -48,7 +70,6 @@ def calculate_gc(windows):
     num_cols = len(windows.to_dataframe().columns)
     windows_nuc = windows.nucleotide_content(fi=genome_fasta)
     windows_nuc_df = windows_nuc.to_dataframe(disable_auto_names=True)
-    print(windows_nuc_df)
     plt.figure()
     sns.kdeplot([float(x) for x in windows_nuc_df[str(num_cols+2)+"_pct_gc"]], clip=(0, 1))
     plt.xlim([0,1])
@@ -87,8 +108,9 @@ def add_gc(df):
 
 
 def add_common_snp_density(df):
+    
     windows = pybedtools.BedTool.from_dataframe(df)
-    num_cols=len(df.columns)
+    num_cols = len(df.columns)
     snps = pybedtools.BedTool(common_snps)
     windows_snps = windows.intersect(snps, c=True)
     window_snps_df = windows_snps.to_dataframe(disable_auto_names=True,header=None)
@@ -97,13 +119,37 @@ def add_common_snp_density(df):
     return df
 
 
+def add_fraction_repeats(df):
+    
+    windows = pybedtools.BedTool.from_dataframe(df)
+    repeats = pybedtools.BedTool(repeats_file)
+    windows_repeats = windows.coverage(repeats)
+    windows_repeats_df = windows_repeats.to_dataframe(disable_auto_names=True,header=None)
+    last_col = len(windows_repeats_df.columns)-1
+    df["fraction_repeats"] = windows_repeats_df[last_col]
+    
+    return df
+
+
+def add_fraction_coding(df):
+    
+    windows = pybedtools.BedTool.from_dataframe(df)
+    whole_genes = pybedtools.BedTool(whole_genes_file)
+    
+    windows_genes = windows.coverage(whole_genes)
+    windows_genes_df = windows_genes.to_dataframe(disable_auto_names=True,header=None)
+    
+    last_col=len(windows_genes_df.columns)-1
+    df["fraction_within_coding_genes"] = windows_genes_df[last_col]
+
+    return df
+
 def common_snp_density(windows):
     num_cols = len(windows.to_dataframe().columns)
 
     snps = pybedtools.BedTool(common_snps)
     windows_snps = windows.intersect(snps,c=True)
     window_snps_df = windows_snps.to_dataframe(disable_auto_names=True,header=None)
-    print(window_snps_df)
     window_snps_df["snp_density"] = window_snps_df[num_cols].astype(int) / ((window_snps_df[2].astype(int) - window_snps_df[1].astype(int)) / 1000)
     
     plt.figure()
@@ -121,7 +167,6 @@ def fraction_repeats(windows):
     windows_repeats = windows.coverage(repeats)
     windows_repeats_df = windows_repeats.to_dataframe(disable_auto_names=True,header=None)
     last_col=len(windows_repeats_df.columns)-1
-    print(windows_repeats_df)
     plt.figure()
     sns.kdeplot(windows_repeats_df[last_col], clip=(0, 1),label="fraction_repeats")
     plt.xlim([0,1])
@@ -138,7 +183,6 @@ def fraction_coding(windows):
     windows_genes_df = windows_genes.to_dataframe(disable_auto_names=True,header=None)
     
     last_col=len(windows_genes_df.columns)-1
-    print(windows_genes_df)
 
     plt.figure()
     sns.kdeplot(windows_genes_df[last_col], clip=(0, 1),label="fraction_repeats")
@@ -158,9 +202,9 @@ if __name__ == "__main__":
        metavar="[bed file input. no header.]",
        required=False,
        help="")
-    parser.add_argument("--out_directory",
+    parser.add_argument("--out_file",
        type=str,
-       metavar="[out directory]",
+       metavar="[out file]",
        required=True,
        help="full path to output results")
     parser.add_argument("--make_windows",
@@ -213,7 +257,7 @@ if __name__ == "__main__":
 
     # print(random_windows(50000,5000).to_dataframe(disable_auto_names=True, header=None))
     # print(add_gc(random_windows(50000,5000).to_dataframe(disable_auto_names=True, header=None)))
-    add_common_snp_density(random_windows(50000,5000).to_dataframe(disable_auto_names=True, header=None))
+    write_df(clean_df(add_fraction_coding(add_fraction_repeats(add_gc(add_common_snp_density(remove_blacklist(random_windows(50000,5000)).to_dataframe(disable_auto_names=True, header=None)))))))
     # if arguments.bed:
     #     input_file = pybedtools.BedTool(arguments.bed)
     #     # return all the stats
