@@ -243,13 +243,13 @@ if __name__ == "__main__":
        metavar="[min fraction of gc]",
        required=False,
        default=0,
-       help="min gc%")
+       help="min gc fraction")
     parser.add_argument("--gc_max",
        type=float,
        metavar="[max fraction of gc]",
        required=False,
        default=1,
-       help="max gc%")
+       help="max gc fraction")
     parser.add_argument("--repeats_min",
        type=float,
        metavar="[min fraction of repeats]",
