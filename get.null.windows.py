@@ -78,6 +78,12 @@ def write_df(df):
 
     return
 
+def write_bed(df):
+
+    df.loc[:,["chrom","start","stop"]].to_csv(arguments.out_file.rstrip(".txt")+'.bed',sep="\t",index=False,header=False)
+
+    return
+
 def random_windows(length,number, write_file=False, file_path=None):
     a=pybedtools.BedTool()
     windows = a.random(l=length, n=number, g=fasta_fai)
@@ -106,7 +112,7 @@ def calculate_gc(windows):
     plt.xlim([0,1])
     plt.suptitle("gc fraction")
     plt.xticks([0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1])
-    plt.savefig("gc.pdf")
+    plt.savefig(arguments.bed.rstrip(".bed")+"_gc.pdf")
 
     return windows_nuc
 
@@ -188,7 +194,7 @@ def common_snp_density(windows):
     plt.xlim([0,10])
     plt.xticks(list(range(0,11)))
     plt.suptitle("snps_per_kb")
-    plt.savefig("snps_per_kb.pdf")
+    plt.savefig(arguments.bed.rstrip(".bed")+"_snps_per_kb.pdf")
 
     return windows_snps
 
@@ -203,7 +209,7 @@ def fraction_repeats(windows):
     plt.xlim([0,1])
     plt.xticks([0,0.2,0.4,0.6,0.8,1])
     plt.suptitle("Fraction_Repeat_Sequence")
-    plt.savefig("fraction_Repeat_sequence.pdf")
+    plt.savefig(arguments.bed.rstrip(".bed")+"_fraction_Repeat_sequence.pdf")
 
     return windows_repeats
 
@@ -220,7 +226,7 @@ def fraction_coding(windows):
     plt.xlim([0,1])
     plt.xticks([0,0.2,0.4,0.6,0.8,1])
     plt.suptitle("Fraction_whole_gene_Sequence")
-    plt.savefig("fraction_genes_sequence.pdf")
+    plt.savefig(arguments.bed.rstrip(".bed")+"_fraction_genes_sequence.pdf")
 
     return
 
@@ -348,6 +354,7 @@ if __name__ == "__main__":
 
         final = sample_df(windows_filtered,num=arguments.num_windows)
         write_df(final)
+        write_bed(final)
 
     ### this section for makingm plots of a user given bed file of windows
     if arguments.bed:
