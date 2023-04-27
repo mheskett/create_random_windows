@@ -5,8 +5,6 @@ import pandas as pd
 import sys
 import matplotlib.pyplot as plt
 import pybedtools
-import scipy.stats
-import random
 import argparse
 import seaborn as sns
 
@@ -108,7 +106,7 @@ def calculate_gc(windows):
     windows_nuc = windows.nucleotide_content(fi=genome_fasta)
     windows_nuc_df = windows_nuc.to_dataframe(disable_auto_names=True)
     plt.figure()
-    sns.kdeplot([float(x) for x in windows_nuc_df[str(num_cols+2)+"_pct_gc"]], clip=(0, 1))
+    plt.hist([float(x) for x in windows_nuc_df[str(num_cols+2)+"_pct_gc"]], bins=50)
     plt.xlim([0,1])
     plt.suptitle("gc fraction")
     plt.xticks([0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1])
@@ -190,9 +188,10 @@ def common_snp_density(windows):
     window_snps_df["snp_density"] = window_snps_df[num_cols].astype(int) / ((window_snps_df[2].astype(int) - window_snps_df[1].astype(int)) / 1000)
     
     plt.figure()
-    sns.kdeplot(window_snps_df["snp_density"], clip=(0, 10),label="snps_per_kb")
-    plt.xlim([0,10])
-    plt.xticks(list(range(0,11)))
+    plt.hist(window_snps_df["snp_density"],bins=500)
+    print(window_snps_df["snp_density"])
+    plt.xlim([0,15])
+    plt.xticks(list(range(0,16)))
     plt.suptitle("snps_per_kb")
     plt.savefig(arguments.bed.rstrip(".bed")+"_snps_per_kb.pdf")
 
@@ -205,10 +204,10 @@ def fraction_repeats(windows):
     windows_repeats_df = windows_repeats.to_dataframe(disable_auto_names=True,header=None)
     last_col=len(windows_repeats_df.columns)-1
     plt.figure()
-    sns.kdeplot(windows_repeats_df[last_col], clip=(0, 1),label="fraction_repeats")
+    plt.hist(windows_repeats_df[last_col],bins=50)
     plt.xlim([0,1])
     plt.xticks([0,0.2,0.4,0.6,0.8,1])
-    plt.suptitle("Fraction_Repeat_Sequence")
+    plt.suptitle("Fraction_Repeat_Sequence. Mean: "+str(windows_repeats_df[last_col].mean()))
     plt.savefig(arguments.bed.rstrip(".bed")+"_fraction_Repeat_sequence.pdf")
 
     return windows_repeats
@@ -222,11 +221,13 @@ def fraction_coding(windows):
     last_col=len(windows_genes_df.columns)-1
 
     plt.figure()
-    sns.kdeplot(windows_genes_df[last_col], clip=(0, 1),label="fraction_repeats")
+    # sns.kdeplot(windows_genes_df[last_col], clip=(0, 1),label="fraction_repeats")
     plt.xlim([0,1])
     plt.xticks([0,0.2,0.4,0.6,0.8,1])
-    plt.suptitle("Fraction_whole_gene_Sequence")
+    plt.suptitle("Fraction_whole_gene_Sequence. Mean: "+str(windows_genes_df[last_col].mean()))
+    plt.hist(windows_genes_df[last_col],bins=50)
     plt.savefig(arguments.bed.rstrip(".bed")+"_fraction_genes_sequence.pdf")
+
 
     return
 
@@ -298,7 +299,7 @@ if __name__ == "__main__":
        required=False,
        help="number of desired windows")
     parser.add_argument("--length_windows",
-       type=int,
+       type=float,
        metavar="[length of windows wanted]",
        required=False,
        help="length of windows desired")   
