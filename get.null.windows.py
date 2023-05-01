@@ -9,6 +9,7 @@ import argparse
 import seaborn as sns
 
 ### all files needed
+tss_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ensemble.tss.coding.stranded.final.nochr.unique.bed"
 fasta_fai = "/Users/heskett/breast.fragile.sites/reference_files/genome.fa.fai"
 blacklist_file = "/Users/heskett/breast.fragile.sites/reference_files/hg19-blacklist.v2.nochr.bed"
 genome_fasta = "/Users/heskett/breast.fragile.sites/reference_files/genome.fa"
@@ -18,6 +19,34 @@ dead_zones_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ncbi
 problematic_regions_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.problematic.nochr.bed"
 whole_genes_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ensemble.coding.whole.genes.bed" ### includes introns and exons of coding genes only
 ###
+
+
+
+def closest_tss(windows):
+    ## requires both files to be sorted.
+    ## distance to TSS is going to be last column of the new df
+    tss=pybedtools.BedTool(tss_file)
+    windows_tss = windows.closest(tss,d=True).to_dataframe(disable_auto_names=True, header=None)
+    last_col = len(windows_tss.columns)
+    plt.figure()
+    plt.hist(windows_tss[last_col-1],bins=500)
+    plt.xlim([0,2000000])
+    # plt.xticks(list(range(0,16)))
+    plt.suptitle("Distance to TSS. Mean: "+str(windows_tss[last_col-1].mean()))
+    plt.savefig(arguments.bed.rstrip(".bed")+"distance_to_tss.pdf")
+
+    return
+
+
+def add_tss_distance(df):
+
+    tss = pybedtools.BedTool(tss_file)
+    a = pybedtools.BedTool.from_dataframe(df)
+    last_col = len(a.columns)
+    df_distance = a.closest(tss, d=True).to_dataframe(disable_auto_names=True, header=None)
+    df["tss_distance"] = df_distance[last_col-1]
+
+    return df
 
 
 def clean_df(df):
@@ -34,7 +63,9 @@ def filter_df(df, snps_min=0,
                 fraction_repeats_min=0,
                 fraction_repeats_max=1,
                 fraction_within_coding_genes_min=0,
-                fraction_within_coding_genes_max=1):
+                fraction_within_coding_genes_max=1,
+                min_tss_dist=0,
+                max_tss_dist=3*10**9):
 
     if snps_min > snps_max:
         print("error in snps argument")
@@ -57,7 +88,9 @@ def filter_df(df, snps_min=0,
             (df["fraction_repeats"].astype(float) >= fraction_repeats_min) &
             (df["fraction_repeats"].astype(float) <= fraction_repeats_max) &
             (df["fraction_within_coding_genes"].astype(float) >= fraction_within_coding_genes_min) & 
-            (df["fraction_within_coding_genes"].astype(float) <= fraction_within_coding_genes_max) ]
+            (df["fraction_within_coding_genes"].astype(float) <= fraction_within_coding_genes_max) &
+            (df["tss_distance"].astype(float) >= min_tss_dist) &
+            (df["tss_distance"].astype(float) <= max_tss_dist)]
 
     return tmp
 
@@ -105,10 +138,11 @@ def calculate_gc(windows):
     num_cols = len(windows.to_dataframe().columns)
     windows_nuc = windows.nucleotide_content(fi=genome_fasta)
     windows_nuc_df = windows_nuc.to_dataframe(disable_auto_names=True)
-    plt.figure()
-    plt.hist([float(x) for x in windows_nuc_df[str(num_cols+2)+"_pct_gc"]], bins=50)
+    plt.figure(figsize=(4,2))
+    dat = [float(x) for x in windows_nuc_df[str(num_cols+2)+"_pct_gc"]]
+    plt.hist(dat, bins=50)
     plt.xlim([0,1])
-    plt.suptitle("gc fraction")
+    plt.suptitle("gc fraction. Mean: "+str(np.array(dat).mean()))
     plt.xticks([0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1])
     plt.savefig(arguments.bed.rstrip(".bed")+"_gc.pdf")
 
@@ -187,12 +221,11 @@ def common_snp_density(windows):
     window_snps_df = windows_snps.to_dataframe(disable_auto_names=True,header=None)
     window_snps_df["snp_density"] = window_snps_df[num_cols].astype(int) / ((window_snps_df[2].astype(int) - window_snps_df[1].astype(int)) / 1000)
     
-    plt.figure()
+    plt.figure(figsize=(4,2))
     plt.hist(window_snps_df["snp_density"],bins=500)
-    print(window_snps_df["snp_density"])
     plt.xlim([0,15])
     plt.xticks(list(range(0,16)))
-    plt.suptitle("snps_per_kb")
+    plt.suptitle("snps_per_kb. Mean: "+str(window_snps_df["snp_density"].mean()))
     plt.savefig(arguments.bed.rstrip(".bed")+"_snps_per_kb.pdf")
 
     return windows_snps
@@ -203,7 +236,7 @@ def fraction_repeats(windows):
     windows_repeats = windows.coverage(repeats)
     windows_repeats_df = windows_repeats.to_dataframe(disable_auto_names=True,header=None)
     last_col=len(windows_repeats_df.columns)-1
-    plt.figure()
+    plt.figure(figsize=(4,2))
     plt.hist(windows_repeats_df[last_col],bins=50)
     plt.xlim([0,1])
     plt.xticks([0,0.2,0.4,0.6,0.8,1])
@@ -220,7 +253,7 @@ def fraction_coding(windows):
     
     last_col=len(windows_genes_df.columns)-1
 
-    plt.figure()
+    plt.figure(figsize=(4,2))
     # sns.kdeplot(windows_genes_df[last_col], clip=(0, 1),label="fraction_repeats")
     plt.xlim([0,1])
     plt.xticks([0,0.2,0.4,0.6,0.8,1])
@@ -303,23 +336,36 @@ if __name__ == "__main__":
        metavar="[length of windows wanted]",
        required=False,
        help="length of windows desired")   
-
+    parser.add_argument("--min_tss_distance",
+       type=int,
+       metavar="[minimum distance to tss]",
+       required=False,
+       help="minimum distance to tss")  
+    parser.add_argument("--max_tss_distance",
+       type=int,
+       metavar="[maximum distance to tss]",
+       required=False,
+       help="maximum distance to tss")  
     arguments = parser.parse_args()
 
 
+    closest_tss(random_windows(50000,10000).sort())
+    exit()
+    ### use pybeddtools sort with the random windows
 
     ## MAIN PROG. Do this if no user bed file is provided.
     ##
     ##
     if arguments.bed == None:
         num_windows_to_try = arguments.num_windows*2
-        windows_unfiltered = clean_df(
+        windows_unfiltered = clean_df( 
+                                add_tss_distance(
                                 add_fraction_coding(
                                 add_fraction_repeats(
                                 add_gc(
                                 add_common_snp_density(
                                 remove_blacklist(
-                                random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None))))))
+                                random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None)))))))
         windows_filtered = filter_df(windows_unfiltered,
                                     snps_min=arguments.snps_per_kb_min,
                                     snps_max=arguments.snps_per_kb_max,
@@ -335,12 +381,13 @@ if __name__ == "__main__":
             num_windows_to_try = num_windows_to_try*3
 
             windows_unfiltered = clean_df(
+                                add_tss_distance(
                                 add_fraction_coding(
                                 add_fraction_repeats(
                                 add_gc(
                                 add_common_snp_density(
                                 remove_blacklist(
-                                random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None))))))
+                                random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None)))))))
             print(windows_unfiltered)
             windows_filtered = filter_df(windows_unfiltered,
                                     snps_min=arguments.snps_per_kb_min,
@@ -359,10 +406,11 @@ if __name__ == "__main__":
 
     ### this section for makingm plots of a user given bed file of windows
     if arguments.bed:
-        input_file = pybedtools.BedTool(arguments.bed)
+        input_file = pybedtools.BedTool(arguments.bed).sort()
         # Make plots. Can add more stats to plots
         fraction_coding(input_file)
         fraction_repeats(input_file)
         common_snp_density(input_file)
         calculate_gc(input_file)
+        closest_tss(input_file)
 
