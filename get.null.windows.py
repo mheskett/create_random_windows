@@ -349,8 +349,6 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
 
 
-    closest_tss(random_windows(50000,10000).sort())
-    exit()
     ### use pybeddtools sort with the random windows
 
     ## MAIN PROG. Do this if no user bed file is provided.
