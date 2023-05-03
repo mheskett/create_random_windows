@@ -21,6 +21,19 @@ whole_genes_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ens
 ###
 
 
+def plot_lengths(windows):
+    df = pybedtools.BedTool(windows).to_dataframe(disable_auto_names=True, header=None)
+
+    plt.figure()
+    lengths = (df[2]-df[1])
+    plt.hist(lengths,bins=100)
+    # plt.xlim([0,2000000]
+    # plt.xticks(list(range(0,16)))
+    plt.suptitle("window length. Mean: "+str(lengths.mean()))
+    plt.savefig(arguments.bed.rstrip(".bed")+"lengths.pdf")
+
+    return
+
 
 def closest_tss(windows):
     ## requires both files to be sorted.
@@ -29,9 +42,9 @@ def closest_tss(windows):
     windows_tss = windows.closest(tss,d=True).to_dataframe(disable_auto_names=True, header=None)
     last_col = len(windows_tss.columns)
     plt.figure()
-    plt.hist(windows_tss[last_col-1],bins=500)
-    plt.xlim([0,2000000])
-    # plt.xticks(list(range(0,16)))
+    plt.hist(np.log2(windows_tss[last_col-1]+1),bins=100)
+    plt.xlim([0,4])
+    plt.xticks(list(range(0,5)))
     plt.suptitle("Distance to TSS. Mean: "+str(windows_tss[last_col-1].mean()))
     plt.savefig(arguments.bed.rstrip(".bed")+"distance_to_tss.pdf")
 
@@ -42,17 +55,20 @@ def add_tss_distance(df):
 
     tss = pybedtools.BedTool(tss_file)
     a = pybedtools.BedTool.from_dataframe(df)
-    last_col = len(a.columns)
+    ### sorted without sorting input. thats a serious bug!!!
     df_distance = a.closest(tss, d=True).to_dataframe(disable_auto_names=True, header=None)
+    last_col = len(df_distance.columns)
     df["tss_distance"] = df_distance[last_col-1]
+    print("added distance")
+    print(df_distance)
 
     return df
 
 
 def clean_df(df):
 
-    tmp = df.loc[:,[0,1,2,"snps_per_kb","percent_gc","fraction_repeats","fraction_within_coding_genes"]]
-    tmp.columns = ["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats","fraction_within_coding_genes"]
+    tmp = df.loc[:,[0,1,2,"snps_per_kb","percent_gc","fraction_repeats","fraction_within_coding_genes","tss_distance"]]
+    tmp.columns = ["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats","fraction_within_coding_genes","tss_distance"]
 
     return tmp.reset_index(drop=True)
 
@@ -80,7 +96,8 @@ def filter_df(df, snps_min=0,
         print("error in coding genes argument")
         return
 
-
+    print("before filtering")
+    print(df)
     tmp = df[(df["snps_per_kb"].astype(float) >= snps_min) & 
             (df["snps_per_kb"].astype(float) <= snps_max) & 
             (df["percent_gc"].astype(float) >= percent_gc_min) & 
@@ -91,6 +108,9 @@ def filter_df(df, snps_min=0,
             (df["fraction_within_coding_genes"].astype(float) <= fraction_within_coding_genes_max) &
             (df["tss_distance"].astype(float) >= min_tss_dist) &
             (df["tss_distance"].astype(float) <= max_tss_dist)]
+
+    print("after filtering")
+    print(tmp)
 
     return tmp
 
@@ -138,7 +158,7 @@ def calculate_gc(windows):
     num_cols = len(windows.to_dataframe().columns)
     windows_nuc = windows.nucleotide_content(fi=genome_fasta)
     windows_nuc_df = windows_nuc.to_dataframe(disable_auto_names=True)
-    plt.figure(figsize=(4,2))
+    plt.figure()
     dat = [float(x) for x in windows_nuc_df[str(num_cols+2)+"_pct_gc"]]
     plt.hist(dat, bins=50)
     plt.xlim([0,1])
@@ -221,7 +241,7 @@ def common_snp_density(windows):
     window_snps_df = windows_snps.to_dataframe(disable_auto_names=True,header=None)
     window_snps_df["snp_density"] = window_snps_df[num_cols].astype(int) / ((window_snps_df[2].astype(int) - window_snps_df[1].astype(int)) / 1000)
     
-    plt.figure(figsize=(4,2))
+    plt.figure()
     plt.hist(window_snps_df["snp_density"],bins=500)
     plt.xlim([0,15])
     plt.xticks(list(range(0,16)))
@@ -236,7 +256,7 @@ def fraction_repeats(windows):
     windows_repeats = windows.coverage(repeats)
     windows_repeats_df = windows_repeats.to_dataframe(disable_auto_names=True,header=None)
     last_col=len(windows_repeats_df.columns)-1
-    plt.figure(figsize=(4,2))
+    plt.figure()
     plt.hist(windows_repeats_df[last_col],bins=50)
     plt.xlim([0,1])
     plt.xticks([0,0.2,0.4,0.6,0.8,1])
@@ -253,7 +273,7 @@ def fraction_coding(windows):
     
     last_col=len(windows_genes_df.columns)-1
 
-    plt.figure(figsize=(4,2))
+    plt.figure()
     # sns.kdeplot(windows_genes_df[last_col], clip=(0, 1),label="fraction_repeats")
     plt.xlim([0,1])
     plt.xticks([0,0.2,0.4,0.6,0.8,1])
@@ -340,11 +360,13 @@ if __name__ == "__main__":
        type=int,
        metavar="[minimum distance to tss]",
        required=False,
+       default=0,
        help="minimum distance to tss")  
     parser.add_argument("--max_tss_distance",
        type=int,
        metavar="[maximum distance to tss]",
        required=False,
+       default=3*10**9,
        help="maximum distance to tss")  
     arguments = parser.parse_args()
 
@@ -363,7 +385,7 @@ if __name__ == "__main__":
                                 add_gc(
                                 add_common_snp_density(
                                 remove_blacklist(
-                                random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None)))))))
+                                random_windows(arguments.length_windows,num_windows_to_try).sort()).to_dataframe(disable_auto_names=True, header=None)))))))
         windows_filtered = filter_df(windows_unfiltered,
                                     snps_min=arguments.snps_per_kb_min,
                                     snps_max=arguments.snps_per_kb_max,
@@ -372,7 +394,9 @@ if __name__ == "__main__":
                                     fraction_repeats_min=arguments.repeats_min,
                                     fraction_repeats_max=arguments.repeats_max,
                                     fraction_within_coding_genes_min=arguments.gene_fraction_min,
-                                    fraction_within_coding_genes_max=arguments.gene_fraction_max)
+                                    fraction_within_coding_genes_max=arguments.gene_fraction_max,
+                                    min_tss_dist=arguments.min_tss_distance,
+                                    max_tss_dist=arguments.max_tss_distance)
         
         while len(windows_filtered.index) < arguments.num_windows:
 
@@ -385,7 +409,7 @@ if __name__ == "__main__":
                                 add_gc(
                                 add_common_snp_density(
                                 remove_blacklist(
-                                random_windows(arguments.length_windows,num_windows_to_try)).to_dataframe(disable_auto_names=True, header=None)))))))
+                                random_windows(arguments.length_windows,num_windows_to_try).sort()).to_dataframe(disable_auto_names=True, header=None)))))))
             print(windows_unfiltered)
             windows_filtered = filter_df(windows_unfiltered,
                                     snps_min=arguments.snps_per_kb_min,
@@ -395,12 +419,15 @@ if __name__ == "__main__":
                                     fraction_repeats_min=arguments.repeats_min,
                                     fraction_repeats_max=arguments.repeats_max,
                                     fraction_within_coding_genes_min=arguments.gene_fraction_min,
-                                    fraction_within_coding_genes_max=arguments.gene_fraction_max)
+                                    fraction_within_coding_genes_max=arguments.gene_fraction_max,
+                                    min_tss_dist=arguments.min_tss_distance,
+                                    max_tss_dist=arguments.max_tss_distance)
             print(windows_filtered)
 
         final = sample_df(windows_filtered,num=arguments.num_windows)
         write_df(final)
         write_bed(final)
+        print("wrote simulated windows")
 
     ### this section for makingm plots of a user given bed file of windows
     if arguments.bed:
@@ -411,4 +438,5 @@ if __name__ == "__main__":
         common_snp_density(input_file)
         calculate_gc(input_file)
         closest_tss(input_file)
+        plot_lengths(input_file)
 

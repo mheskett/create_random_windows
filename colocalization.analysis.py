@@ -26,6 +26,133 @@ if __name__ == "__main__":
 		metavar="[bed file input. no header.]",
 		required=False,
 		help="bed file 2")
+
+### a files
+###
+	parser.add_argument("--gc_min_a",
+	   type=float,
+	   metavar="[min fraction of gc]",
+	   required=False,
+	   default=0,
+	   help="min gc fraction")
+	parser.add_argument("--gc_max_a",
+	   type=float,
+	   metavar="[max fraction of gc]",
+	   required=False,
+	   default=1,
+	   help="max gc fraction")
+	parser.add_argument("--repeats_min_a",
+	   type=float,
+	   metavar="[min fraction of repeats]",
+	   required=False,
+	   default=0,
+	   help="min fraction of repeat derived sequence")
+	parser.add_argument("--repeats_max_a",
+	   type=float,
+	   metavar="[max fraction of repeats]",
+	   required=False,
+	   default=1,
+	   help="max fraction of repeat derived sequence")
+	parser.add_argument("--snps_per_kb_min_a",
+	   type=float,
+	   metavar="[min fraction of common snps per kb]",
+	   required=False,
+	   default=0,
+	   help="min snps per kb")
+	parser.add_argument("--snps_per_kb_max_a",
+	   type=float,
+	   metavar="[max fraction of common snps per kb]",
+	   required=False,
+	   default=1000,
+	   help="max snps per kb")
+	parser.add_argument("--gene_fraction_min_a",
+	   type=float,
+	   metavar="[min fraction of genes in windows allowed]",
+	   required=False,
+	   default=0,
+	   help="min fraction of whole gene sequence")
+	parser.add_argument("--gene_fraction_max_a",
+	   type=float,
+	   metavar="[max fraction of genes in windows allowed]",
+	   required=False,
+	   default=1,
+	   help="max fraction of whole gene sequence") 
+	parser.add_argument("--min_tss_distance_a",
+	   type=int,
+	   metavar="[minimum distance to tss]",
+	   required=False,
+	   default=0,
+	   help="minimum distance to tss")  
+	parser.add_argument("--max_tss_distance_a",
+	   type=int,
+	   metavar="[maximum distance to tss]",
+	   required=False,
+	   default=3*10**9,
+	   help="maximum distance to tss") 
+
+
+### b files
+####
+	parser.add_argument("--gc_min_b",
+	   type=float,
+	   metavar="[min fraction of gc]",
+	   required=False,
+	   default=0,
+	   help="min gc fraction")
+	parser.add_argument("--gc_max_b",
+	   type=float,
+	   metavar="[max fraction of gc]",
+	   required=False,
+	   default=1,
+	   help="max gc fraction")
+	parser.add_argument("--repeats_min_b",
+	   type=float,
+	   metavar="[min fraction of repeats]",
+	   required=False,
+	   default=0,
+	   help="min fraction of repeat derived sequence")
+	parser.add_argument("--repeats_max_b",
+	   type=float,
+	   metavar="[max fraction of repeats]",
+	   required=False,
+	   default=1,
+	   help="max fraction of repeat derived sequence")
+	parser.add_argument("--snps_per_kb_min_b",
+	   type=float,
+	   metavar="[min fraction of common snps per kb]",
+	   required=False,
+	   default=0,
+	   help="min snps per kb")
+	parser.add_argument("--snps_per_kb_max_b",
+	   type=float,
+	   metavar="[max fraction of common snps per kb]",
+	   required=False,
+	   default=1000,
+	   help="max snps per kb")
+	parser.add_argument("--gene_fraction_min_b",
+	   type=float,
+	   metavar="[min fraction of genes in windows allowed]",
+	   required=False,
+	   default=0,
+	   help="min fraction of whole gene sequence")
+	parser.add_argument("--gene_fraction_max_b",
+	   type=float,
+	   metavar="[max fraction of genes in windows allowed]",
+	   required=False,
+	   default=1,
+	   help="max fraction of whole gene sequence") 
+	parser.add_argument("--min_tss_distance_b",
+	   type=int,
+	   metavar="[minimum distance to tss]",
+	   required=False,
+	   default=0,
+	   help="minimum distance to tss")  
+	parser.add_argument("--max_tss_distance_b",
+	   type=int,
+	   metavar="[maximum distance to tss]",
+	   required=False,
+	   default=3*10**9,
+	   help="maximum distance to tss") 
 	arguments = parser.parse_args()
 
 
@@ -56,9 +183,19 @@ if __name__ == "__main__":
 	num_iterations=10
 	# functionalize and then parallelize this to make the whole thing way faster
 	for i in range(num_iterations):
-		os.system("python get.null.windows.py --out_file colocalization_windows_a_tmp_"+str(i)+".txt --num_windows "+str(num_a)+" --length_windows "+str(median_size_a))
-		os.system("python get.null.windows.py --out_file colocalization_windows_b_tmp_"+str(i)+".txt --num_windows "+str(num_b)+" --length_windows "+str(median_size_b))
-	###
+		os.system("python get.null.windows.py --out_file colocalization_windows_a_tmp_" + str(i)+".txt --num_windows " + str(num_a)+" --length_windows " + str(median_size_a)+
+			" --gc_min "+ str(arguments.gc_min_a) + " --gc_max " + str(arguments.gc_max_a) + " --repeats_min " + str(arguments.repeats_min_a) + " --repeats_max " + str(arguments.repeats_max_a) +
+			" --snps_per_kb_min "+ str(arguments.snps_per_kb_min_a) + " --snps_per_kb_max " + str(arguments.snps_per_kb_max_a) + " --gene_fraction_min " + str(arguments.gene_fraction_min_a) +
+			" --gene_fraction_max "+ str(arguments.gene_fraction_max_a) + " --min_tss_distance "+str(arguments.min_tss_distance_a) + " --max_tss_distance " + str(arguments.max_tss_distance_a))
+		
+
+		os.system("python get.null.windows.py --out_file colocalization_windows_b_tmp_"+str(i)+".txt --num_windows "+str(num_b)+" --length_windows "+str(median_size_b)+
+			" --gc_min "+ str(arguments.gc_min_b) + " --gc_max " + str(arguments.gc_max_b) + " --repeats_min " + str(arguments.repeats_min_b) + " --repeats_max " + str(arguments.repeats_max_b) +
+			" --snps_per_kb_min "+ str(arguments.snps_per_kb_min_b) + " --snps_per_kb_max " + str(arguments.snps_per_kb_max_b) + " --gene_fraction_min " + str(arguments.gene_fraction_min_b) +
+			" --gene_fraction_max "+ str(arguments.gene_fraction_max_b) + " --min_tss_distance "+str(arguments.min_tss_distance_b) + " --max_tss_distance " + str(arguments.max_tss_distance_b))
+		
+		print("simulated round "+str(i))
+
 	intersections_per_mb=[]
 	for i in range(num_iterations):
 		simulated_windows = [pybedtools.BedTool("colocalization_windows_a_tmp_" + str(i) + ".bed"),
