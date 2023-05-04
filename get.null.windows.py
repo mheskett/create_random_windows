@@ -21,6 +21,7 @@ whole_genes_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ens
 ###
 
 
+
 def plot_lengths(windows):
     df = pybedtools.BedTool(windows).to_dataframe(disable_auto_names=True, header=None)
 
@@ -36,15 +37,19 @@ def plot_lengths(windows):
 
 
 def closest_tss(windows):
+
+    ## not going to work when you have weird chromosome names like "gl_"
     ## requires both files to be sorted.
     ## distance to TSS is going to be last column of the new df
     tss=pybedtools.BedTool(tss_file)
     windows_tss = windows.closest(tss,d=True).to_dataframe(disable_auto_names=True, header=None)
     last_col = len(windows_tss.columns)
     plt.figure()
+    # print((windows_tss[last_col-1]).min())
+    print(windows_tss.sort_values(last_col-1))
     plt.hist(np.log2(windows_tss[last_col-1]+1),bins=100)
-    plt.xlim([0,4])
-    plt.xticks(list(range(0,5)))
+    # plt.xlim([0,4])
+    # plt.xticks(list(range(0,5)))
     plt.suptitle("Distance to TSS. Mean: "+str(windows_tss[last_col-1].mean()))
     plt.savefig(arguments.bed.rstrip(".bed")+"distance_to_tss.pdf")
 
@@ -59,8 +64,6 @@ def add_tss_distance(df):
     df_distance = a.closest(tss, d=True).to_dataframe(disable_auto_names=True, header=None)
     last_col = len(df_distance.columns)
     df["tss_distance"] = df_distance[last_col-1]
-    print("added distance")
-    print(df_distance)
 
     return df
 
@@ -231,6 +234,12 @@ def add_fraction_coding(df):
     last_col=len(windows_genes_df.columns)-1
     df["fraction_within_coding_genes"] = windows_genes_df[last_col]
 
+    # print("windows genes df")
+    # print(windows_genes_df)
+    # windows_genes_df.to_csv("test234.txt",sep="\t")
+    # print("df")
+    # print(df)
+
     return df
 
 def common_snp_density(windows):
@@ -272,7 +281,6 @@ def fraction_coding(windows):
     windows_genes_df = windows_genes.to_dataframe(disable_auto_names=True,header=None)
     
     last_col=len(windows_genes_df.columns)-1
-
     plt.figure()
     # sns.kdeplot(windows_genes_df[last_col], clip=(0, 1),label="fraction_repeats")
     plt.xlim([0,1])
