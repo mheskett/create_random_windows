@@ -32,9 +32,11 @@ def remove_reals(df_sims, df_reals):
     sims = pybedtools.BedTool.from_dataframe(df_sims)
     tmp = sims.closest(reals,d=True).to_dataframe(disable_auto_names=True, header=None)
     # remove sims that intersect reals. increase the value below to make a min distance
-    tmp = tmp[tmp[tmp.columns[1]]>0]
-
-    return tmp
+    # tmp = tmp[tmp[tmp.columns[-1]]>0]
+    df_sims["dist_to_real"]=tmp[tmp.columns[-1]]
+    # print("df_sims", df_sims)
+    # print("df sims after dropping ",df_sims[df_sims["dist_to_real"]>0].drop("dist_to_real",axis=1))
+    return df_sims[df_sims["dist_to_real"]>0].drop("dist_to_real",axis=1)
 
 
 def plot_lengths(windows):
@@ -413,8 +415,10 @@ windows_unfiltered = clean_df(
                         add_fraction_repeats(
                         add_gc(
                         add_common_snp_density(
-                        remove_blacklist(
-                        random_windows(470,100000).sort()).to_dataframe(disable_auto_names=True, header=None)))))))
+                        remove_reals(
+                                    df_sims=remove_blacklist(
+                                    random_windows(470,100000).sort()).to_dataframe(disable_auto_names=True, header=None),
+                                    df_reals=windows)))))))
 windows_filtered = filter_df(windows_unfiltered,
                                     snps_min=arguments.snps_per_kb_min,
                                     snps_max=arguments.snps_per_kb_max,
@@ -429,7 +433,8 @@ windows_filtered = filter_df(windows_unfiltered,
 
 
 
-
+# remove_reals(df_sims=windows_filtered,df_reals=windows)
+# exit()
 ##############
 # windows_filtered["tss_distance"] = np.log2(windows_filtered["tss_distance"]+1)
 combined = pd.concat([windows,windows_filtered])
