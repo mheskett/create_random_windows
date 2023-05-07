@@ -448,3 +448,8 @@ if __name__ == "__main__":
         closest_tss(input_file)
         plot_lengths(input_file)
 
+### new idea
+### make a lot of fake windows, then do K means or dbscan clustering and visualize with t-sne or umap. compare
+### where these are on the plot with the real windows.
+
+
