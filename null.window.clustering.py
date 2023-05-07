@@ -26,6 +26,12 @@ whole_genes_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ens
 ###
 
 
+def remove_duplicates():
+
+
+    return
+
+
 def remove_reals(df_sims, df_reals):
 
     reals = pybedtools.BedTool.from_dataframe(df_reals)
@@ -450,8 +456,22 @@ dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(
 
 # get indices of nearest euclidean neighbors.
 indices = []
+## slow algorithm
 for i in range(len(dist_mat)):
-    indices += [np.argmin(dist_mat[i])]
+    closest = np.argmin(dist_mat[i])
+    if closest not in indices:
+        indices += [closest]
+        print("added first closest")
+    else:
+        index=1
+        tmp_list=list(dist_mat[i])
+        tmp_sorted = sorted(dist_mat[i])
+        while closest in indices:
+            print(index)
+            closest = tmp_list.index(tmp_sorted[index])
+            index += 1
+        indices += [closest]
+
 # get index of Y with lowest distance
 indices_added = [x+len(windows) for  x in indices]
 #####
@@ -492,7 +512,8 @@ ax[2].set_title("Real binding sites")
 
 plt.show()
 ######
-
+exit()
+## exit exit exit exit
 
 
 
