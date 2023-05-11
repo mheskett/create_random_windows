@@ -41,11 +41,11 @@ def add_3utr_distance(df):
     a = pybedtools.BedTool.from_dataframe(df)
     df_distance = a.closest(three_utr, d=True, t="first").to_dataframe(disable_auto_names=True, header=None)
 
-    df["three_utr_distance"] = df_distance[df_distance.columns[-1]]
+    df["three_utr_distance"] = df_distance[df_distance.columns[-1]].tolist()
 
     windows_utrs = a.coverage(three_utr)
     windows_utrs_df = windows_utrs.to_dataframe(disable_auto_names=True,header=None)
-    df["fraction_three_utr"] = windows_utrs_df[windows_utrs_df.columns[-1]]
+    df["fraction_three_utr"] = windows_utrs_df[windows_utrs_df.columns[-1]].tolist()
 
     return df
 
@@ -54,11 +54,11 @@ def add_5utr_distance(df):
     five_utr = pybedtools.BedTool(five_utr_file)
     a = pybedtools.BedTool.from_dataframe(df.loc[:,[0,1,2]])
     df_distance = a.closest(five_utr, d=True, t="first").to_dataframe(disable_auto_names=True, header=None)
-    df["five_utr_distance"] = df_distance[df_distance.columns[-1]]
+    df["five_utr_distance"] = df_distance[df_distance.columns[-1]].tolist()
 
     windows_utrs = a.coverage(five_utr)
     windows_utrs_df = windows_utrs.to_dataframe(disable_auto_names=True,header=None)
-    df["fraction_five_utr"] = windows_utrs_df[windows_utrs_df.columns[-1]]
+    df["fraction_five_utr"] = windows_utrs_df[windows_utrs_df.columns[-1]].tolist()
     
     
     return df
@@ -69,11 +69,11 @@ def add_intron_distance(df):
     introns = pybedtools.BedTool(introns_file)
     a = pybedtools.BedTool.from_dataframe(df)
     df_distance = a.closest(introns, d=True, t="first").to_dataframe(disable_auto_names=True, header=None)
-    df["intron_distance"] = df_distance[df_distance.columns[-1]]
+    df["intron_distance"] = df_distance[df_distance.columns[-1]].tolist()
 
     windows_introns = a.coverage(introns)
     windows_introns_df = windows_introns.to_dataframe(disable_auto_names=True,header=None)
-    df["fraction_introns"] = windows_introns_df[windows_introns_df.columns[-1]]
+    df["fraction_introns"] = windows_introns_df[windows_introns_df.columns[-1]].tolist()
     
     return df
 
@@ -82,11 +82,11 @@ def add_exon_distance(df):
     exons = pybedtools.BedTool(exons_file)
     a = pybedtools.BedTool.from_dataframe(df)
     df_distance = a.closest(exons, d=True, t="first").to_dataframe(disable_auto_names=True, header=None)
-    df["exon_distance"] = df_distance[df_distance.columns[-1]]
+    df["exon_distance"] = df_distance[df_distance.columns[-1]].tolist()
 
     windows_exons = a.coverage(exons)
-    windows_exons_df = windows_introns.to_dataframe(disable_auto_names=True,header=None)
-    df["fraction_exons"] = windows_exons[windows_exons_df.columns[-1]]
+    windows_exons_df = windows_exons.to_dataframe(disable_auto_names=True,header=None)
+    df["fraction_exons"] = windows_exons_df[windows_exons_df.columns[-1]].tolist()
     
     return df
 
@@ -95,11 +95,11 @@ def add_whole_coding_gene_distance(df):
     whole_gene = pybedtools.BedTool(whole_genes_file)
     a = pybedtools.BedTool.from_dataframe(df)
     df_distance = a.closest(whole_gene, d=True, t="first").to_dataframe(disable_auto_names=True, header=None)
-    df["whole_coding_gene_distance"] = df_distance[df_distance.columns[-1]]
+    df["whole_coding_gene_distance"] = df_distance[df_distance.columns[-1]].tolist()
 
     windows_whole_gene = a.coverage(whole_gene)
     windows_whole_gene_df = windows_whole_gene.to_dataframe(disable_auto_names=True,header=None)
-    df["fraction_whole_coding_gene_distance"] = windows_whole_gene_df[windows_whole_gene_df.columns[-1]]
+    df["fraction_whole_coding_gene_distance"] = windows_whole_gene_df[windows_whole_gene_df.columns[-1]].tolist()
     
     return df
 
@@ -162,12 +162,12 @@ def clean_df(df):
     tmp = df.loc[:,[0,1,2,"snps_per_kb","percent_gc","fraction_repeats",
                             "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
                             "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
-                            "intron_distance","fraction_introns"]]
+                            "intron_distance","fraction_introns","exon_distance","fraction_exons"]]
 
     tmp.columns = ["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats",
                             "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
                             "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
-                            "intron_distance","fraction_introns"]
+                            "intron_distance","fraction_introns","exon_distance","fraction_exons"]
 
     tmp = tmp[tmp["chrom"]!="Y"]
 
@@ -479,11 +479,14 @@ if __name__ == "__main__":
 
 
 
-df = pd.read_csv("GSM3563751_mcf7_wt_e2_peaks_liftover_hg19.nochr.filtered.bed",sep="\t")
+# df = pd.read_csv("GSM3563751_mcf7_wt_e2_peaks_liftover_hg19.nochr.filtered.bed",sep="\t")
+# windows_file = pybedtools.BedTool("GSM3563751_mcf7_wt_e2_peaks_liftover_hg19.nochr.filtered.bed")
 
-windows_file = pybedtools.BedTool("GSM3563751_mcf7_wt_e2_peaks_liftover_hg19.nochr.filtered.bed")
 
+
+windows_file = pybedtools.BedTool("amplicon_segments_project7_ecDNA_positive.bed")
 windows = clean_df(
+            add_exon_distance(
             add_tss_distance(
             add_intron_distance(
             add_whole_coding_gene_distance(
@@ -492,13 +495,14 @@ windows = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density( # add common snp return NANs
-            remove_blacklist(windows_file.sort()).to_dataframe(disable_auto_names=True, header=None))))))))))
+            remove_blacklist(windows_file.sort()).to_dataframe(disable_auto_names=True, header=None)))))))))))
 
-
-print('debug',add_gc(add_common_snp_density(remove_reals(df_sims=remove_blacklist(random_windows(470,100000).sort()).to_dataframe(disable_auto_names=True, header=None),
-                        df_reals=windows))))
+print("windows",windows)
+# print('debug',add_gc(add_common_snp_density(remove_reals(df_sims=remove_blacklist(random_windows(470,100000).sort()).to_dataframe(disable_auto_names=True, header=None),
+#                         df_reals=windows))))
 
 windows_unfiltered = clean_df( 
+            add_exon_distance(
             add_tss_distance(
             add_intron_distance(
             add_whole_coding_gene_distance(
@@ -507,31 +511,29 @@ windows_unfiltered = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density(
-            remove_reals(df_sims=remove_blacklist(random_windows(470,75000).sort()).to_dataframe(disable_auto_names=True, header=None),
-                        df_reals=windows).reset_index(drop=True))))))))))
+            remove_reals(df_sims=remove_blacklist(random_windows(500000,10000).sort()).to_dataframe(disable_auto_names=True, header=None),
+                        df_reals=windows).reset_index(drop=True)))))))))))
 
 windows_filtered = windows_unfiltered
 
-# remove_reals(df_sims=windows_filtered,df_reals=windows)
-# exit()
+
 ##############
 # windows_filtered["tss_distance"] = np.log2(windows_filtered["tss_distance"]+1)
 combined = pd.concat([windows,windows_filtered])
 ###
 
 combined.to_csv("testdf9.txt",sep="\t")
-# df1 = preprocessing.scale(windows.loc[:,["snps_per_kb","percent_gc","fraction_repeats","fraction_within_coding_genes","tss_distance"]])
-# df2 = preprocessing.scale(windows_filtered.loc[:,["snps_per_kb","percent_gc","fraction_repeats","fraction_within_coding_genes","tss_distance"]])
 
 ## try scaling together
 combined_scaled = preprocessing.scale(combined.loc[:,["snps_per_kb","percent_gc","fraction_repeats",
                             "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
                             "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
-                            "intron_distance","fraction_introns"]].reset_index(drop=True))
-
+                            "intron_distance","fraction_introns","exon_distance","fraction_exons"]].reset_index(drop=True))
+print(combined_scaled)
 dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:],Y=combined_scaled[len(windows):,:])
 
-
+print(dist_mat)
+print(len(dist_mat))
 # get indices of nearest euclidean neighbors.
 indices = []
 ## slow algorithm
@@ -539,14 +541,16 @@ for i in range(len(dist_mat)):
     closest = np.argmin(dist_mat[i])
     if closest not in indices:
         indices += [closest]
-        print("added first closest")
+        # print("added first closest")
     else:
         index=1
         tmp_list=list(dist_mat[i])
         tmp_sorted = sorted(dist_mat[i])
+        print("dist mat i",tmp_list)
+        print("tmp_sorted",tmp_sorted)
         while closest in indices:
             print(index)
-            closest = tmp_list.index(tmp_sorted[index])
+            closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows 
             index += 1
         indices += [closest]
 
@@ -589,6 +593,7 @@ ax[2].set_title("Real binding sites")
 
 
 plt.show()
+plt.close()
 ######
 ## exit exit exit exit
 
@@ -613,7 +618,7 @@ plt.show()
 ###
 ## TSNE TSNE TSNE
 
-fig,ax=plt.subplots(2,12)
+fig,ax=plt.subplots(2,14)
 ax[0,0].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,0],cmap="Blues")
 ax[0,1].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,1],cmap="Blues")
 ax[0,2].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,2],cmap="Blues")
@@ -626,6 +631,8 @@ ax[0,8].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=
 ax[0,9].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,9],cmap="Blues")
 ax[0,10].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,10],cmap="Blues")
 ax[0,11].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,11],cmap="Blues")
+ax[0,12].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,12],cmap="Blues")
+ax[0,13].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,13],cmap="Blues")
 
 
 
@@ -642,6 +649,10 @@ ax[1,8].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],
 ax[1,9].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),9],cmap="Reds")
 ax[1,10].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),10],cmap="Reds")
 ax[1,11].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),11],cmap="Reds")
+ax[1,12].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),12],cmap="Reds")
+ax[1,13].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),13],cmap="Reds")
+
+
 
 ax[0,0].set_title("sim snps per kb",fontdict={"fontsize":8})
 ax[0,1].set_title("sim percent gc",fontdict={"fontsize":8})
@@ -655,20 +666,28 @@ ax[0,8].set_title("sim frac coding gene",fontdict={"fontsize":8})
 ax[0,9].set_title("sim tss dist",fontdict={"fontsize":8})
 ax[0,10].set_title("sim intron dist",fontdict={"fontsize":8})
 ax[0,11].set_title("sim frac intron",fontdict={"fontsize":8})
+ax[0,12].set_title("sim exon dist",fontdict={"fontsize":8})
+ax[0,13].set_title("sim frac exon",fontdict={"fontsize":8})
 
 
-ax[1,0].set_title("sim snps per kb",fontdict={"fontsize":8})
-ax[1,1].set_title("sim percent gc",fontdict={"fontsize":8})
-ax[1,2].set_title("sim frac repeats",fontdict={"fontsize":8})
-ax[1,3].set_title("sim 3UTR dist",fontdict={"fontsize":8})
-ax[1,4].set_title("sim frac 3UTR",fontdict={"fontsize":8})
-ax[1,5].set_title("sim 5UTR dist",fontdict={"fontsize":8})
-ax[1,6].set_title("sim frac 5UTR",fontdict={"fontsize":8})
-ax[1,7].set_title("sim coding gene dist",fontdict={"fontsize":8})
-ax[1,8].set_title("sim frac coding gene",fontdict={"fontsize":8})
-ax[1,9].set_title("sim tss dist",fontdict={"fontsize":8})
-ax[1,10].set_title("sim intron dist",fontdict={"fontsize":8})
-ax[1,11].set_title("sim frac intron",fontdict={"fontsize":8})
+
+
+ax[1,0].set_title("snps per kb",fontdict={"fontsize":8})
+ax[1,1].set_title("percent gc",fontdict={"fontsize":8})
+ax[1,2].set_title("frac repeats",fontdict={"fontsize":8})
+ax[1,3].set_title("3UTR dist",fontdict={"fontsize":8})
+ax[1,4].set_title("frac 3UTR",fontdict={"fontsize":8})
+ax[1,5].set_title("5UTR dist",fontdict={"fontsize":8})
+ax[1,6].set_title("frac 5UTR",fontdict={"fontsize":8})
+ax[1,7].set_title("coding gene dist",fontdict={"fontsize":8})
+ax[1,8].set_title("frac coding gene",fontdict={"fontsize":8})
+ax[1,9].set_title("tss dist",fontdict={"fontsize":8})
+ax[1,10].set_title("intron dist",fontdict={"fontsize":8})
+ax[1,11].set_title("frac intron",fontdict={"fontsize":8})
+ax[1,12].set_title("exon dist",fontdict={"fontsize":8})
+ax[1,13].set_title("frac exon",fontdict={"fontsize":8})
+
+
 # ax[0,0].set_xlim([-5,5])
 # ax[0,1].set_xlim([-5,5])
 # ax[0,2].set_xlim([-5,5])
