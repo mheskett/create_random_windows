@@ -10,6 +10,17 @@ import random
 import argparse
 import seaborn as sns
 import statistics
+from multiprocessing import Pool
+from multiprocessing import cpu_count
+
+
+def call_clustering(args):
+
+	## hard coded: args[0] is bed file. arg[1] is out file
+
+	os.system("python null.window.clustering.py --bed "+args[0]+" --out_file "+args[1])
+
+	return
 
 ## inputs file A and file B in be format. outputs P-value and maybe some metrics.
 
@@ -51,19 +62,31 @@ if __name__ == "__main__":
 
 	print(real_intersections_per_mb)
 
+####
 
 
+	#####
+	num_iterations=10
+	data = [[arguments.a_bed,"colocalization_windows_a_tmp_"+str(x)+".bed"] for x in range(num_iterations)] + \
+			[[arguments.b_bed,"colocalization_windows_b_tmp_"+str(x)+".bed"] for x in range(num_iterations)]
 
-	num_iterations=5
-	# functionalize and then parallelize this to make the whole thing way faster
-	for i in range(num_iterations):
+	print(data)
+	print(cpu_count())
+	processes = 8
+	with Pool(processes) as pool:
+	    pool.map(call_clustering, data)
+	#####
 
-		## parallelize this ezpz
-		os.system("python null.window.clustering.py --bed "+arguments.a_bed+" --out_file colocalization_windows_a_tmp_"+str(i))
+	# num_iterations=5
+	# # functionalize and then parallelize this to make the whole thing way faster
+	# for i in range(num_iterations):
+
+	# 	## parallelize this ezpz
+	# 	os.system("python null.window.clustering.py --bed "+arguments.a_bed+" --out_file colocalization_windows_a_tmp_"+str(i))
 		
-		os.system("python null.window.clustering.py --bed "+arguments.b_bed+" --out_file colocalization_windows_b_tmp_"+str(i))
+	# 	os.system("python null.window.clustering.py --bed "+arguments.b_bed+" --out_file colocalization_windows_b_tmp_"+str(i))
 
-		print("simulated round "+str(i))
+	# 	print("simulated round "+str(i))
 
 	intersections_per_mb=[]
 	for i in range(num_iterations):
