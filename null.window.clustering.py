@@ -395,86 +395,22 @@ def fraction_coding(windows):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="make windows")
 
-    # parser.add_argument("--bed",
-    #    type=str,
-    #    metavar="[bed file input. no header.]",
-    #    required=False,
-    #    help="input bed file to plot genome features distributions")
-    # parser.add_argument("--out_file",
-    #    type=str,
-    #    metavar="[out file]",
-    #    required=True,
-    #    help="full path to output results")
-    parser.add_argument("--gc_min",
-       type=float,
-       metavar="[min fraction of gc]",
+    parser.add_argument("--bed",
+       type=str,
+       metavar="[bed file input. no header.]",
        required=False,
-       default=0,
-       help="min gc fraction")
-    parser.add_argument("--gc_max",
-       type=float,
-       metavar="[max fraction of gc]",
+       help="input bed file to plot genome features distributions")
+    parser.add_argument("--out_file",
+       type=str,
+       metavar="[out file]",
+       required=True,
+       help="full path to output results")
+    parser.add_argument("--make_plots",
+       type=str,
+       metavar="[to make plots or not]",
        required=False,
-       default=1,
-       help="max gc fraction")
-    parser.add_argument("--repeats_min",
-       type=float,
-       metavar="[min fraction of repeats]",
-       required=False,
-       default=0,
-       help="min fraction of repeat derived sequence")
-    parser.add_argument("--repeats_max",
-       type=float,
-       metavar="[max fraction of repeats]",
-       required=False,
-       default=1,
-       help="max fraction of repeat derived sequence")
-    parser.add_argument("--snps_per_kb_min",
-       type=float,
-       metavar="[min fraction of common snps per kb]",
-       required=False,
-       default=0,
-       help="min snps per kb")
-    parser.add_argument("--snps_per_kb_max",
-       type=float,
-       metavar="[max fraction of common snps per kb]",
-       required=False,
-       default=1000,
-       help="max snps per kb")
-    parser.add_argument("--gene_fraction_min",
-       type=float,
-       metavar="[min fractino of genes in windows allowed]",
-       required=False,
-       default=0,
-       help="min fraction of whole gene sequence")
-    parser.add_argument("--gene_fraction_max",
-       type=float,
-       metavar="[max fraction of genes in windows allowed]",
-       required=False,
-       default=1,
-       help="max fraction of whole gene sequence")
-    parser.add_argument("--num_windows",
-       type=int,
-       metavar="[number of windows wanted]",
-       required=False,
-       help="number of desired windows")
-    parser.add_argument("--length_windows",
-       type=float,
-       metavar="[length of windows wanted]",
-       required=False,
-       help="length of windows desired")   
-    parser.add_argument("--min_tss_distance",
-       type=int,
-       metavar="[minimum distance to tss]",
-       required=False,
-       default=0,
-       help="minimum distance to tss")  
-    parser.add_argument("--max_tss_distance",
-       type=int,
-       metavar="[maximum distance to tss]",
-       required=False,
-       default=3*10**9,
-       help="maximum distance to tss")  
+       help="outputting plots or not")
+
     arguments = parser.parse_args()
 
 
@@ -482,9 +418,12 @@ if __name__ == "__main__":
 # df = pd.read_csv("GSM3563751_mcf7_wt_e2_peaks_liftover_hg19.nochr.filtered.bed",sep="\t")
 # windows_file = pybedtools.BedTool("GSM3563751_mcf7_wt_e2_peaks_liftover_hg19.nochr.filtered.bed")
 
+windows_file = pybedtools.BedTool(arguments.bed)
+windows_file_df = pd.read_csv(arguments.bed,sep="\t", header=None)
+median_length = (windows_file_df[2] - windows_file_df[1]).median()
+number = len(windows_file_df)
 
-
-windows_file = pybedtools.BedTool("amplicon_segments_project7_ecDNA_positive.bed")
+# windows_file = pybedtools.BedTool("amplicon_segments_project7_ecDNA_positive.bed")
 windows = clean_df(
             add_exon_distance(
             add_tss_distance(
@@ -497,11 +436,11 @@ windows = clean_df(
             add_common_snp_density( # add common snp return NANs
             remove_blacklist(windows_file.sort()).to_dataframe(disable_auto_names=True, header=None)))))))))))
 
-print("windows",windows)
+# print("windows",windows)
 # print('debug',add_gc(add_common_snp_density(remove_reals(df_sims=remove_blacklist(random_windows(470,100000).sort()).to_dataframe(disable_auto_names=True, header=None),
 #                         df_reals=windows))))
 
-windows_unfiltered = clean_df( 
+simulated_windows = clean_df( 
             add_exon_distance(
             add_tss_distance(
             add_intron_distance(
@@ -511,29 +450,33 @@ windows_unfiltered = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density(
-            remove_reals(df_sims=remove_blacklist(random_windows(500000,10000).sort()).to_dataframe(disable_auto_names=True, header=None),
+            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*5).sort()).to_dataframe(disable_auto_names=True, header=None),
                         df_reals=windows).reset_index(drop=True)))))))))))
 
-windows_filtered = windows_unfiltered
 
 
 ##############
-# windows_filtered["tss_distance"] = np.log2(windows_filtered["tss_distance"]+1)
-combined = pd.concat([windows,windows_filtered])
+combined = pd.concat([windows,simulated_windows])
 ###
 
-combined.to_csv("testdf9.txt",sep="\t")
+combined["three_utr_distance"] = np.log2(combined["three_utr_distance"]+1)
+combined["five_utr_distance"] = np.log2(combined["five_utr_distance"]+1)
+combined["whole_coding_gene_distance"] = np.log2(combined["whole_coding_gene_distance"]+1)
+combined["tss_distance"] = np.log2(combined["tss_distance"]+1)
+combined["exon_distance"] = np.log2(combined["exon_distance"]+1)
+combined["intron_distance"] = np.log2(combined["intron_distance"]+1)
+
+
+# combined.to_csv("testdf9.txt",sep="\t")
 
 ## try scaling together
 combined_scaled = preprocessing.scale(combined.loc[:,["snps_per_kb","percent_gc","fraction_repeats",
                             "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
                             "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
                             "intron_distance","fraction_introns","exon_distance","fraction_exons"]].reset_index(drop=True))
-print(combined_scaled)
 dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:],Y=combined_scaled[len(windows):,:])
 
-print(dist_mat)
-print(len(dist_mat))
+
 # get indices of nearest euclidean neighbors.
 indices = []
 ## slow algorithm
@@ -546,183 +489,167 @@ for i in range(len(dist_mat)):
         index=1
         tmp_list=list(dist_mat[i])
         tmp_sorted = sorted(dist_mat[i])
-        print("dist mat i",tmp_list)
-        print("tmp_sorted",tmp_sorted)
         while closest in indices:
-            print(index)
             closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows 
             index += 1
         indices += [closest]
 
 # get index of Y with lowest distance
 indices_added = [x+len(windows) for  x in indices]
+simulated_windows.loc[indices,:].to_csv(arguments.out_file,sep="\t",header=None,index=None)
+
+
+if arguments.make_plots:
 #####
-tsne=TSNE(n_components=2)
-
-#dat_tsne_test=tsne.fit_transform(np.append(combined_scaled[0:len(windows),:],combined_scaled[indices,:],axis=0))
-
-dat_tsne_test = tsne.fit_transform(combined_scaled)
-
-## also tsne up just all the fake windows to see where they lie
-# dat_tsne_fake = tsne.fit_transform(combined_scaled[len(windows):,:])
-print(len(dat_tsne_test))
-# print(len(windows))
-# ##
-
-windows_filtered.loc[indices,:].to_csv("simulated.windows.123.bed",sep="\t",header=None,index=None)
-
-fig,ax = plt.subplots(1,3)
-
-## fix this part
-ax[0].scatter(dat_tsne_test[:,0],dat_tsne_test[:,1],s=20,lw=0.5,edgecolor="black",c="blue")
-ax[1].scatter(dat_tsne_test[indices_added,0],dat_tsne_test[indices_added,1],s=20,lw=0.5,edgecolor="black",c="blue")
-ax[2].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c="red")
-
-ax[0].set_xlim([-80,80])
-ax[0].set_ylim([-80,80])
-ax[1].set_xlim([-80,80])
-ax[1].set_ylim([-80,80])
-ax[2].set_xlim([-80,80])
-ax[2].set_ylim([-80,80])
-ax[0].grid()
-ax[1].grid()
-ax[2].grid()
-ax[0].set_title("All simulated binding sites")
-ax[1].set_title("Nearest simulated Neighbor to each real binding sites")
-ax[2].set_title("Real binding sites")
+    tsne=TSNE(n_components=2)
+    dat_tsne_test = tsne.fit_transform(combined_scaled)
 
 
-plt.show()
-plt.close()
-######
-## exit exit exit exit
+    #####
+    fig,ax = plt.subplots(1,3)
+    ax[0].scatter(dat_tsne_test[:,0],dat_tsne_test[:,1],s=20,lw=0.5,edgecolor="black",c="blue")
+    ax[1].scatter(dat_tsne_test[indices_added,0],dat_tsne_test[indices_added,1],s=20,lw=0.5,edgecolor="black",c="blue")
+    ax[2].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c="red")
 
-# new fig
-
-# ##
-# fig,ax = plt.subplots(1,2)
-# ax[0].scatter(dat[len(windows):,0],dat[len(windows):,1],s=20,lw=0.5,edgecolor="black",c="blue")
-# ax[1].scatter(dat[0:len(windows),0],dat[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c="red")
-# ax[0].set_xlim([-4,4])
-# ax[0].set_ylim([-4,4])
-# ax[1].set_xlim([-4,4])
-# ax[1].set_ylim([-4,4])
-# ax[0].grid()
-# ax[1].grid()
-# ax[0].set_title("simulated binding sites")
-# ax[1].set_title("real binding sites")
-
-# plt.show()
+    ax[0].set_xlim([-80,80])
+    ax[0].set_ylim([-80,80])
+    ax[1].set_xlim([-80,80])
+    ax[1].set_ylim([-80,80])
+    ax[2].set_xlim([-80,80])
+    ax[2].set_ylim([-80,80])
+    ax[0].grid()
+    ax[1].grid()
+    ax[2].grid()
+    ax[0].set_title("All simulated binding sites")
+    ax[1].set_title("Nearest simulated Neighbor to each real binding sites")
+    ax[2].set_title("Real binding sites")
 
 
-###
-## TSNE TSNE TSNE
+    plt.show()
+    plt.close()
+    ######
 
-fig,ax=plt.subplots(2,14)
-ax[0,0].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,0],cmap="Blues")
-ax[0,1].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,1],cmap="Blues")
-ax[0,2].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,2],cmap="Blues")
-ax[0,3].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,3],cmap="Blues")
-ax[0,4].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,4],cmap="Blues")
-ax[0,5].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,5],cmap="Blues")
-ax[0,6].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,6],cmap="Blues")
-ax[0,7].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,7],cmap="Blues")
-ax[0,8].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,8],cmap="Blues")
-ax[0,9].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,9],cmap="Blues")
-ax[0,10].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,10],cmap="Blues")
-ax[0,11].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,11],cmap="Blues")
-ax[0,12].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,12],cmap="Blues")
-ax[0,13].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,13],cmap="Blues")
+
+    ###
+    ## TSNE TSNE TSNE
+
+    fig,ax=plt.subplots(2,14)
+    ax[0,0].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,0],cmap="Blues")
+    ax[0,1].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,1],cmap="Blues")
+    ax[0,2].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,2],cmap="Blues")
+    ax[0,3].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,3],cmap="Blues")
+    ax[0,4].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,4],cmap="Blues")
+    ax[0,5].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,5],cmap="Blues")
+    ax[0,6].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,6],cmap="Blues")
+    ax[0,7].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,7],cmap="Blues")
+    ax[0,8].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,8],cmap="Blues")
+    ax[0,9].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,9],cmap="Blues")
+    ax[0,10].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,10],cmap="Blues")
+    ax[0,11].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,11],cmap="Blues")
+    ax[0,12].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,12],cmap="Blues")
+    ax[0,13].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,13],cmap="Blues")
 
 
 
-
-ax[1,0].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),0],cmap="Reds")
-ax[1,1].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),1],cmap="Reds")
-ax[1,2].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),2],cmap="Reds")
-ax[1,3].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),3],cmap="Reds")
-ax[1,4].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),4],cmap="Reds")
-ax[1,5].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),5],cmap="Reds")
-ax[1,6].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),6],cmap="Reds")
-ax[1,7].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),7],cmap="Reds")
-ax[1,8].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),8],cmap="Reds")
-ax[1,9].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),9],cmap="Reds")
-ax[1,10].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),10],cmap="Reds")
-ax[1,11].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),11],cmap="Reds")
-ax[1,12].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),12],cmap="Reds")
-ax[1,13].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),13],cmap="Reds")
-
-
-
-ax[0,0].set_title("sim snps per kb",fontdict={"fontsize":8})
-ax[0,1].set_title("sim percent gc",fontdict={"fontsize":8})
-ax[0,2].set_title("sim frac repeats",fontdict={"fontsize":8})
-ax[0,3].set_title("sim 3UTR dist",fontdict={"fontsize":8})
-ax[0,4].set_title("sim frac 3UTR",fontdict={"fontsize":8})
-ax[0,5].set_title("sim 5UTR dist",fontdict={"fontsize":8})
-ax[0,6].set_title("sim frac 5UTR",fontdict={"fontsize":8})
-ax[0,7].set_title("sim coding gene dist",fontdict={"fontsize":8})
-ax[0,8].set_title("sim frac coding gene",fontdict={"fontsize":8})
-ax[0,9].set_title("sim tss dist",fontdict={"fontsize":8})
-ax[0,10].set_title("sim intron dist",fontdict={"fontsize":8})
-ax[0,11].set_title("sim frac intron",fontdict={"fontsize":8})
-ax[0,12].set_title("sim exon dist",fontdict={"fontsize":8})
-ax[0,13].set_title("sim frac exon",fontdict={"fontsize":8})
+    ax[1,0].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),0],cmap="Reds")
+    ax[1,1].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),1],cmap="Reds")
+    ax[1,2].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),2],cmap="Reds")
+    ax[1,3].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),3],cmap="Reds")
+    ax[1,4].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),4],cmap="Reds")
+    ax[1,5].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),5],cmap="Reds")
+    ax[1,6].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),6],cmap="Reds")
+    ax[1,7].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),7],cmap="Reds")
+    ax[1,8].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),8],cmap="Reds")
+    ax[1,9].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),9],cmap="Reds")
+    ax[1,10].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),10],cmap="Reds")
+    ax[1,11].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),11],cmap="Reds")
+    ax[1,12].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),12],cmap="Reds")
+    ax[1,13].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),13],cmap="Reds")
 
 
 
-
-ax[1,0].set_title("snps per kb",fontdict={"fontsize":8})
-ax[1,1].set_title("percent gc",fontdict={"fontsize":8})
-ax[1,2].set_title("frac repeats",fontdict={"fontsize":8})
-ax[1,3].set_title("3UTR dist",fontdict={"fontsize":8})
-ax[1,4].set_title("frac 3UTR",fontdict={"fontsize":8})
-ax[1,5].set_title("5UTR dist",fontdict={"fontsize":8})
-ax[1,6].set_title("frac 5UTR",fontdict={"fontsize":8})
-ax[1,7].set_title("coding gene dist",fontdict={"fontsize":8})
-ax[1,8].set_title("frac coding gene",fontdict={"fontsize":8})
-ax[1,9].set_title("tss dist",fontdict={"fontsize":8})
-ax[1,10].set_title("intron dist",fontdict={"fontsize":8})
-ax[1,11].set_title("frac intron",fontdict={"fontsize":8})
-ax[1,12].set_title("exon dist",fontdict={"fontsize":8})
-ax[1,13].set_title("frac exon",fontdict={"fontsize":8})
-
-
-# ax[0,0].set_xlim([-5,5])
-# ax[0,1].set_xlim([-5,5])
-# ax[0,2].set_xlim([-5,5])
-# ax[0,3].set_xlim([-5,5])
-# ax[0,4].set_xlim([-5,5])
-# ax[1,0].set_xlim([-5,5])
-# ax[1,1].set_xlim([-5,5])
-# ax[1,2].set_xlim([-5,5])
-# ax[1,3].set_xlim([-5,5])
-# ax[1,4].set_xlim([-5,5])
-
-# ax[0,0].set_ylim([-3,5])
-# ax[0,1].set_ylim([-3,5])
-# ax[0,2].set_ylim([-3,5])
-# ax[0,3].set_ylim([-3,5])
-# ax[0,4].set_ylim([-3,5])
-# ax[1,0].set_ylim([-3,5])
-# ax[1,1].set_ylim([-3,5])
-# ax[1,2].set_ylim([-3,5])
-# ax[1,3].set_ylim([-3,5])
-# ax[1,4].set_ylim([-3,5])
-
-ax[0,0].grid()
-ax[0,1].grid()
-ax[0,2].grid()
-ax[0,3].grid()
-ax[0,4].grid()
-ax[1,0].grid()
-ax[1,1].grid()
-ax[1,2].grid()
-ax[1,3].grid()
-ax[1,4].grid()
+    ax[0,0].set_title("sim snps per kb",fontdict={"fontsize":8})
+    ax[0,1].set_title("sim percent gc",fontdict={"fontsize":8})
+    ax[0,2].set_title("sim frac repeats",fontdict={"fontsize":8})
+    ax[0,3].set_title("sim 3UTR dist",fontdict={"fontsize":8})
+    ax[0,4].set_title("sim frac 3UTR",fontdict={"fontsize":8})
+    ax[0,5].set_title("sim 5UTR dist",fontdict={"fontsize":8})
+    ax[0,6].set_title("sim frac 5UTR",fontdict={"fontsize":8})
+    ax[0,7].set_title("sim coding gene dist",fontdict={"fontsize":8})
+    ax[0,8].set_title("sim frac coding gene",fontdict={"fontsize":8})
+    ax[0,9].set_title("sim tss dist",fontdict={"fontsize":8})
+    ax[0,10].set_title("sim intron dist",fontdict={"fontsize":8})
+    ax[0,11].set_title("sim frac intron",fontdict={"fontsize":8})
+    ax[0,12].set_title("sim exon dist",fontdict={"fontsize":8})
+    ax[0,13].set_title("sim frac exon",fontdict={"fontsize":8})
 
 
-plt.show()
+    ax[1,0].set_title("snps per kb",fontdict={"fontsize":8})
+    ax[1,1].set_title("percent gc",fontdict={"fontsize":8})
+    ax[1,2].set_title("frac repeats",fontdict={"fontsize":8})
+    ax[1,3].set_title("3UTR dist",fontdict={"fontsize":8})
+    ax[1,4].set_title("frac 3UTR",fontdict={"fontsize":8})
+    ax[1,5].set_title("5UTR dist",fontdict={"fontsize":8})
+    ax[1,6].set_title("frac 5UTR",fontdict={"fontsize":8})
+    ax[1,7].set_title("coding gene dist",fontdict={"fontsize":8})
+    ax[1,8].set_title("frac coding gene",fontdict={"fontsize":8})
+    ax[1,9].set_title("tss dist",fontdict={"fontsize":8})
+    ax[1,10].set_title("intron dist",fontdict={"fontsize":8})
+    ax[1,11].set_title("frac intron",fontdict={"fontsize":8})
+    ax[1,12].set_title("exon dist",fontdict={"fontsize":8})
+    ax[1,13].set_title("frac exon",fontdict={"fontsize":8})
+
+
+    # ax[0,0].set_xlim([-5,5])
+    # ax[0,1].set_xlim([-5,5])
+    # ax[0,2].set_xlim([-5,5])
+    # ax[0,3].set_xlim([-5,5])
+    # ax[0,4].set_xlim([-5,5])
+    # ax[1,0].set_xlim([-5,5])
+    # ax[1,1].set_xlim([-5,5])
+    # ax[1,2].set_xlim([-5,5])
+    # ax[1,3].set_xlim([-5,5])
+    # ax[1,4].set_xlim([-5,5])
+
+    # ax[0,0].set_ylim([-3,5])
+    # ax[0,1].set_ylim([-3,5])
+    # ax[0,2].set_ylim([-3,5])
+    # ax[0,3].set_ylim([-3,5])
+    # ax[0,4].set_ylim([-3,5])
+    # ax[1,0].set_ylim([-3,5])
+    # ax[1,1].set_ylim([-3,5])
+    # ax[1,2].set_ylim([-3,5])
+    # ax[1,3].set_ylim([-3,5])
+    # ax[1,4].set_ylim([-3,5])
+
+    ax[0,0].grid()
+    ax[0,1].grid()
+    ax[0,2].grid()
+    ax[0,3].grid()
+    ax[0,4].grid()
+    ax[0,5].grid()
+    ax[0,6].grid()
+    ax[0,7].grid()
+    ax[0,8].grid()
+    ax[0,9].grid()
+    ax[0,10].grid()
+    ax[0,11].grid()
+
+    ax[1,0].grid()
+    ax[1,1].grid()
+    ax[1,2].grid()
+    ax[1,3].grid()
+    ax[1,4].grid()
+    ax[1,5].grid()
+    ax[1,6].grid()
+    ax[1,7].grid()
+    ax[1,8].grid()
+    ax[1,9].grid()
+    ax[1,10].grid()
+    ax[1,11].grid()
+
+
+    plt.show()
 
 
 exit()
