@@ -27,12 +27,103 @@ three_utr_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.hg19.
 five_utr_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.hg19.5utr.exons.nochr.bed"
 introns_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.hg19.introns.nochr.sorted.bed"
 exons_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.refseq.all.exons.hg19.nochr.bed"
+
+## roadmap file
+breast_hmec35_e028_file = "/Users/heskett/breast.fragile.sites/roadmap.statemodels/E028_25_imputed12marks_stateno.bed"
+breast_myo_e027_file ="/Users/heskett/breast.fragile.sites/roadmap.statemodels/E027_25_imputed12marks_stateno.bed"
+breast_hmec_e119_file =  "/Users/heskett/breast.fragile.sites/roadmap.statemodels/E119_25_imputed12marks_stateno.bed"
+
 ###
 
 ### 
 
 ## dist AND coverage for UTRs, exons, introns, <---(non specific if coding or noncoding), and then whole coding gene cov and dist
 
+
+def add_chromatin_states(df):
+    ## filters out regions that dont have chromatin states assigned
+    ## one idea: just use breast cell lines (3)
+    ## two idea: use all cell lines.
+    ## equation = count number of states within window for all cell lines. each state is a feature
+    ## code can absolutely be cleaned up
+
+    ## do ratios instead of binary!!!!!
+    statelist = ["state_"+str(x) for x in range(1,26)]
+
+    a = pybedtools.BedTool.from_dataframe(df)#.sort() make sure NOT to sort and then add stuff back!!!!
+    numcols=len(df.columns)
+    breast_hmec35_e028 = pybedtools.BedTool(breast_hmec35_e028_file).sort()
+    breast_myo_e027 = pybedtools.BedTool(breast_myo_e027_file).sort()
+    breast_hmec_e119 = pybedtools.BedTool(breast_hmec_e119_file).sort()
+
+    tmp_df = a.map(b=breast_hmec35_e028,o="collapse",c=4).\
+        map(b=breast_myo_e027,o="collapse",c=4).\
+        map(b=breast_hmec_e119,o="collapse",c=4).to_dataframe(disable_auto_names=True, header=None)
+    tmp_df["all_states"] = tmp_df[tmp_df.columns[-1]] + "," + tmp_df[tmp_df.columns[-2]] + "," + tmp_df[tmp_df.columns[-3]]
+    tmp_df["all_states"] = tmp_df.apply(lambda x: x["all_states"].split(","),axis=1)
+
+
+    df["all_states"] = tmp_df["all_states"]
+    # print("df with all states",df)
+    tmp_filter=df.all_states.apply(lambda x: "." not in x)
+    df = df[tmp_filter]
+    # print("df with all states filtered",df)
+
+    counts=[]
+    for index,row in df.iterrows():
+        counts+=[[1 if str(x) in row["all_states"] else 0 for x in range(1,26) ]]
+
+    df = pd.concat([df, pd.DataFrame(counts,columns=["state_"+str(x) for x in range(1,26)])],axis=1).drop("all_states",axis=1)
+    # print("df.....",df)
+
+    # print(pd.concat( [tmp_df.loc[:,0:numcols-1], pd.DataFrame(counts,columns=["state_"+str(x) for x in range(1,26)])],axis=1))
+
+    return df
+
+
+def add_chromatin_state_ratios(df):
+
+    a = pybedtools.BedTool.from_dataframe(df).sort()
+    numcols=len(df.columns)
+    breast_hmec35_e028 = pybedtools.BedTool(breast_hmec35_e028_file).sort()
+    breast_myo_e027 = pybedtools.BedTool(breast_myo_e027_file).sort()
+    breast_hmec_e119 = pybedtools.BedTool(breast_hmec_e119_file).sort()
+    vec1=a.intersect(b=breast_hmec35_e028, wao=True).to_dataframe(disable_auto_names=True, header=None)
+    # print(vec1.groupby([0,1,2])[vec1.columns[-1]].apply(list))
+    # print(vec1.groupby([0,1,2]).agg({8:list,9:list}))
+
+    print(vec1.groupby([0,1,2])[8,9].agg(list))
+    tmp = vec1.groupby([0,1,2])[[8,9]].agg(list).reset_index()
+    tmp["len"] = tmp[2]-tmp[1]
+    print(tmp)
+    ratios=[]
+    for index,row in tmp.iterrows():
+        # if len(row[8])!=len(row[9]):
+        #     print("len wrong....")
+        tmp2=[]
+        for x in row[9]:
+            tmp2+=[x/row["len"]]
+        ratios+=[tmp2]
+
+    print(ratios)
+    tmp["ratios"]=ratios
+    print(tmp)
+
+    return
+
+
+def add_chromatin_state_ratios2(df):
+    ## trying to separate the state files initially to simplify the bedtools work....
+    # statelist = ["state_"+str(x) for x in range(1,26)]
+    a = pybedtools.BedTool.from_dataframe(df)#.sort() dont sort A files!
+    numcols=len(df.columns)
+    file_prefixes=[breast_hmec35_e028_file,breast_myo_e027_file,breast_hmec_e119_file]
+    ### add a column to df?
+    for i in range(len(file_prefixes)):
+        for j in range(1,26):
+            df[os.path.basename(file_prefixes[i])+".state"+str(j)] = a.coverage(b=file_prefixes[i]+".state"+str(j)+".bed").to_dataframe(disable_auto_names=True,header=None).iloc[:,-1:]
+
+    return df
 
 ## add distance and coverage
 def add_3utr_distance(df):
@@ -157,17 +248,20 @@ def add_tss_distance(df):
     return df
 
 
-def clean_df(df):
+def clean_df(df,featurelist=None):
 
-    tmp = df.loc[:,[0,1,2,"snps_per_kb","percent_gc","fraction_repeats",
-                            "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
-                            "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
-                            "intron_distance","fraction_introns","exon_distance","fraction_exons"]]
 
-    tmp.columns = ["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats",
-                            "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
-                            "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
-                            "intron_distance","fraction_introns","exon_distance","fraction_exons"]
+    df=df.rename(columns={0:"chrom", 1:"start", 2:"stop"})
+
+    tmp = df.loc[:,featurelist]
+
+    # tmp.columns = ["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats",
+    #                         "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
+    #                         "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
+    #                         "intron_distance","fraction_introns","exon_distance","fraction_exons",'state_1', 
+    #                         'state_2', 'state_3', 'state_4', 'state_5', 'state_6', 'state_7', 'state_8', 'state_9',
+    #                          'state_10', 'state_11', 'state_12', 'state_13', 'state_14', 'state_15', 'state_16',
+    #                         'state_17', 'state_18', 'state_19', 'state_20', 'state_21', 'state_22', 'state_23', 'state_24', 'state_25']
 
     tmp = tmp[tmp["chrom"]!="Y"]
 
@@ -406,12 +500,11 @@ if __name__ == "__main__":
        required=True,
        help="full path to output results")
     parser.add_argument("--make_plots",
-       type=str,
-       metavar="[to make plots or not]",
+       action="store_true",
        required=False,
        help="outputting plots or not")
-
     arguments = parser.parse_args()
+
 
 
 
@@ -423,8 +516,26 @@ windows_file_df = pd.read_csv(arguments.bed,sep="\t", header=None)
 median_length = (windows_file_df[2] - windows_file_df[1]).median()
 number = len(windows_file_df)
 
+## make feature string for cell lines
+#######
+file_prefixes=[breast_hmec35_e028_file,breast_myo_e027_file,breast_hmec_e119_file]
+featurelist=["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats",
+                            "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
+                            "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
+                            "intron_distance","fraction_introns","exon_distance","fraction_exons"]
+for i in range(len(file_prefixes)):
+    for j in range(1,26):
+        featurelist+= [os.path.basename(file_prefixes[i])+".state"+str(j)]
+
+########
+#########
+
+
+
+##testing
 # windows_file = pybedtools.BedTool("amplicon_segments_project7_ecDNA_positive.bed")
 windows = clean_df(
+            add_chromatin_state_ratios2(
             add_exon_distance(
             add_tss_distance(
             add_intron_distance(
@@ -434,13 +545,14 @@ windows = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density( # add common snp return NANs
-            remove_blacklist(windows_file.sort()).to_dataframe(disable_auto_names=True, header=None)))))))))))
+            remove_blacklist(windows_file.sort()).to_dataframe(disable_auto_names=True, header=None))))))))))),featurelist=featurelist)
 
 # print("windows",windows)
 # print('debug',add_gc(add_common_snp_density(remove_reals(df_sims=remove_blacklist(random_windows(470,100000).sort()).to_dataframe(disable_auto_names=True, header=None),
 #                         df_reals=windows))))
 
-simulated_windows = clean_df( 
+simulated_windows = clean_df(
+            add_chromatin_state_ratios2(
             add_exon_distance(
             add_tss_distance(
             add_intron_distance(
@@ -451,10 +563,10 @@ simulated_windows = clean_df(
             add_gc(
             add_common_snp_density(
             remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*5).sort()).to_dataframe(disable_auto_names=True, header=None),
-                        df_reals=windows).reset_index(drop=True)))))))))))
+                        df_reals=windows).reset_index(drop=True))))))))))),featurelist=featurelist)
 
 
-
+print(windows)
 ##############
 combined = pd.concat([windows,simulated_windows])
 ###
@@ -470,28 +582,29 @@ combined["intron_distance"] = np.log2(combined["intron_distance"]+1)
 # combined.to_csv("testdf9.txt",sep="\t")
 
 ## try scaling together
-combined_scaled = preprocessing.scale(combined.loc[:,["snps_per_kb","percent_gc","fraction_repeats",
-                            "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
-                            "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
-                            "intron_distance","fraction_introns","exon_distance","fraction_exons"]].reset_index(drop=True))
-dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:],Y=combined_scaled[len(windows):,:])
+combined_scaled = preprocessing.scale(combined.loc[:,featurelist[3:]].reset_index(drop=True)) # this removes chrom start stop
+dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:], Y=combined_scaled[len(windows):,:])
 
 
 # get indices of nearest euclidean neighbors.
 indices = []
-## slow algorithm
+## slow algorithm. can definitely engineer this to be an order of magnitude faster
+## takes like 2 min for 12,000 rows sample with 90 something features
+print("starting nearest neighbors")
 for i in range(len(dist_mat)):
+    # print(i)
     closest = np.argmin(dist_mat[i])
     if closest not in indices:
         indices += [closest]
         # print("added first closest")
     else:
         index=1
-        tmp_list=list(dist_mat[i])
-        tmp_sorted = sorted(dist_mat[i])
+        tmp_list=list(dist_mat[i]) # im sure theres a numpy implement of this which would be faster
+        tmp_sorted = sorted(dist_mat[i]) # numpy implement of this would be faster
         while closest in indices:
-            closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows 
+            closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows. # again numpy implement of index
             index += 1
+            # print(index)
         indices += [closest]
 
 # get index of Y with lowest distance
@@ -500,8 +613,11 @@ simulated_windows.loc[indices,:].to_csv(arguments.out_file,sep="\t",header=None,
 
 
 if arguments.make_plots:
+    print("starting tsne")
 #####
-    tsne=TSNE(n_components=2)
+    tsne=TSNE(n_components=2) # does not scale. slow
+    # tsne taking forever
+    tsne=PCA(n_components=2)
     dat_tsne_test = tsne.fit_transform(combined_scaled)
 
 
@@ -533,7 +649,7 @@ if arguments.make_plots:
     ###
     ## TSNE TSNE TSNE
 
-    fig,ax=plt.subplots(2,14)
+    fig,ax=plt.subplots(2,39,figsize=(50,5))
     ax[0,0].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,0],cmap="Blues")
     ax[0,1].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,1],cmap="Blues")
     ax[0,2].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,2],cmap="Blues")
@@ -548,6 +664,32 @@ if arguments.make_plots:
     ax[0,11].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,11],cmap="Blues")
     ax[0,12].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,12],cmap="Blues")
     ax[0,13].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,13],cmap="Blues")
+    ax[0,14].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,14],cmap="Blues")
+    ax[0,15].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,15],cmap="Blues")
+    ax[0,16].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,16],cmap="Blues")
+    ax[0,17].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,17],cmap="Blues")
+    ax[0,18].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,18],cmap="Blues")
+    ax[0,19].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,19],cmap="Blues")
+    ax[0,20].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,20],cmap="Blues")
+    ax[0,21].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,21],cmap="Blues")
+    ax[0,22].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,22],cmap="Blues")
+    ax[0,23].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,23],cmap="Blues")
+    ax[0,24].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,24],cmap="Blues")
+    ax[0,25].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,25],cmap="Blues")
+    ax[0,26].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,26],cmap="Blues")
+    ax[0,27].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,27],cmap="Blues")
+    ax[0,28].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,28],cmap="Blues")
+    ax[0,29].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,29],cmap="Blues")
+    ax[0,30].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,30],cmap="Blues")
+    ax[0,31].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,31],cmap="Blues")
+    ax[0,32].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,32],cmap="Blues")
+    ax[0,33].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,33],cmap="Blues")
+    ax[0,34].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,34],cmap="Blues")
+    ax[0,35].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,35],cmap="Blues")
+    ax[0,36].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,36],cmap="Blues")
+    ax[0,37].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,37],cmap="Blues")
+    ax[0,38].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,38],cmap="Blues")
+
 
 
 
@@ -565,6 +707,34 @@ if arguments.make_plots:
     ax[1,11].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),11],cmap="Reds")
     ax[1,12].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),12],cmap="Reds")
     ax[1,13].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),13],cmap="Reds")
+    ax[1,14].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,14],cmap="Reds")
+    ax[1,15].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,15],cmap="Reds")
+    ax[1,16].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,16],cmap="Reds")
+    ax[1,17].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,17],cmap="Reds")
+    ax[1,18].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,18],cmap="Reds")
+    ax[1,19].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,19],cmap="Reds")
+    ax[1,20].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,20],cmap="Reds")
+    ax[1,21].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,21],cmap="Reds")
+    ax[1,22].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,22],cmap="Reds")
+    ax[1,23].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,23],cmap="Reds")
+    ax[1,24].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,24],cmap="Reds")
+    ax[1,25].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,25],cmap="Reds")
+    ax[1,26].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,26],cmap="Reds")
+    ax[1,27].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,27],cmap="Reds")
+    ax[1,28].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,28],cmap="Reds")
+    ax[1,29].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,29],cmap="Reds")
+    ax[1,30].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,30],cmap="Reds")
+    ax[1,31].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,31],cmap="Reds")
+    ax[1,32].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,32],cmap="Reds")
+    ax[1,33].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,33],cmap="Reds")
+    ax[1,34].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,34],cmap="Reds")
+    ax[1,35].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,35],cmap="Reds")
+    ax[1,36].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,36],cmap="Reds")
+    ax[1,37].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,37],cmap="Reds")
+    ax[1,38].scatter(dat_tsne_test[len(windows):,0],dat_tsne_test[len(windows):,1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[len(windows):,38],cmap="Reds")
+
+
+
 
 
 
@@ -648,11 +818,21 @@ if arguments.make_plots:
     ax[1,10].grid()
     ax[1,11].grid()
 
-
-    plt.show()
+    plt.savefig("test99.png",dpi=300)
+    # plt.show()
 
 
 exit()
+
+### chromatin state plots
+
+tmp = add_chromatin_states(windows_file_df)
+
+
+
+
+
+
 ####
 #PCA PCA PCA
 
