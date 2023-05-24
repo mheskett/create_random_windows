@@ -13,6 +13,7 @@ from sklearn.metrics.pairwise import euclidean_distances
 from sklearn import preprocessing
 from sklearn.decomposition import PCA
 from numba import njit
+import time
 
 ### all files needed
 tss_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ensemble.tss.coding.stranded.final.nochr.unique.bed"
@@ -68,7 +69,6 @@ def fast_find_nearest_unique_neighbor(XY):
     neighbors = np.zeros(XY.shape[0], dtype='int32')
 
     for i in range(XY.shape[0]):
-        print(i)
         x_min = 9999
         x_argmin = -1
         for j in range(XY.shape[1]):
@@ -85,86 +85,87 @@ def fast_find_nearest_unique_neighbor(XY):
 def add_mcf7_rt(df):
     a = pybedtools.BedTool.from_dataframe(df)
     rt = pybedtools.BedTool(mcf7_rt_file).sort()
-    windows_rt = a.map(b=rt,o="mean",c=4)
+    windows_rt = a.map(b=rt, o="mean", c=4)
     windows_rt_df = windows_rt.to_dataframe(disable_auto_names=True,header=None)
     df["mean_rt"] = windows_rt_df[windows_rt_df.columns[-1]]
 
     return df[df["mean_rt"]!="."]
 
 
-def add_chromatin_states(df):
-    ## filters out regions that dont have chromatin states assigned
-    ## one idea: just use breast cell lines (3)
-    ## two idea: use all cell lines.
-    ## equation = count number of states within window for all cell lines. each state is a feature
-    ## code can absolutely be cleaned up
+# def add_chromatin_states(df):
+#     ## filters out regions that dont have chromatin states assigned
+#     ## one idea: just use breast cell lines (3)
+#     ## two idea: use all cell lines.
+#     ## equation = count number of states within window for all cell lines. each state is a feature
+#     ## code can absolutely be cleaned up
 
-    ## do ratios instead of binary!!!!!
-    statelist = ["state_"+str(x) for x in range(1,26)]
+#     ## do ratios instead of binary!!!!!
+#     statelist = ["state_"+str(x) for x in range(1,26)]
 
-    a = pybedtools.BedTool.from_dataframe(df)#.sort() make sure NOT to sort and then add stuff back!!!!
-    numcols=len(df.columns)
-    breast_hmec35_e028 = pybedtools.BedTool(breast_hmec35_e028_file).sort()
-    breast_myo_e027 = pybedtools.BedTool(breast_myo_e027_file).sort()
-    breast_hmec_e119 = pybedtools.BedTool(breast_hmec_e119_file).sort()
+#     a = pybedtools.BedTool.from_dataframe(df)#.sort() make sure NOT to sort and then add stuff back!!!!
+#     numcols=len(df.columns)
+#     breast_hmec35_e028 = pybedtools.BedTool(breast_hmec35_e028_file).sort()
+#     breast_myo_e027 = pybedtools.BedTool(breast_myo_e027_file).sort()
+#     breast_hmec_e119 = pybedtools.BedTool(breast_hmec_e119_file).sort()
 
-    tmp_df = a.map(b=breast_hmec35_e028,o="collapse",c=4).\
-        map(b=breast_myo_e027,o="collapse",c=4).\
-        map(b=breast_hmec_e119,o="collapse",c=4).to_dataframe(disable_auto_names=True, header=None)
-    tmp_df["all_states"] = tmp_df[tmp_df.columns[-1]] + "," + tmp_df[tmp_df.columns[-2]] + "," + tmp_df[tmp_df.columns[-3]]
-    tmp_df["all_states"] = tmp_df.apply(lambda x: x["all_states"].split(","),axis=1)
-
-
-    df["all_states"] = tmp_df["all_states"]
-    # print("df with all states",df)
-    tmp_filter=df.all_states.apply(lambda x: "." not in x)
-    df = df[tmp_filter]
-    # print("df with all states filtered",df)
-
-    counts=[]
-    for index,row in df.iterrows():
-        counts+=[[1 if str(x) in row["all_states"] else 0 for x in range(1,26) ]]
-
-    df = pd.concat([df, pd.DataFrame(counts,columns=["state_"+str(x) for x in range(1,26)])],axis=1).drop("all_states",axis=1)
-    # print("df.....",df)
-
-    # print(pd.concat( [tmp_df.loc[:,0:numcols-1], pd.DataFrame(counts,columns=["state_"+str(x) for x in range(1,26)])],axis=1))
-
-    return df
+#     tmp_df = a.map(b=breast_hmec35_e028,o="collapse",c=4).\
+#         map(b=breast_myo_e027,o="collapse",c=4).\
+#         map(b=breast_hmec_e119,o="collapse",c=4).to_dataframe(disable_auto_names=True, header=None)
+#     tmp_df["all_states"] = tmp_df[tmp_df.columns[-1]] + "," + tmp_df[tmp_df.columns[-2]] + "," + tmp_df[tmp_df.columns[-3]]
+#     tmp_df["all_states"] = tmp_df.apply(lambda x: x["all_states"].split(","),axis=1)
 
 
-def add_chromatin_state_ratios(df):
+#     df["all_states"] = tmp_df["all_states"]
+#     # print("df with all states",df)
+#     tmp_filter=df.all_states.apply(lambda x: "." not in x)
+#     df = df[tmp_filter]
+#     # print("df with all states filtered",df)
 
-    a = pybedtools.BedTool.from_dataframe(df).sort()
-    numcols=len(df.columns)
-    breast_hmec35_e028 = pybedtools.BedTool(breast_hmec35_e028_file).sort()
-    breast_myo_e027 = pybedtools.BedTool(breast_myo_e027_file).sort()
-    breast_hmec_e119 = pybedtools.BedTool(breast_hmec_e119_file).sort()
-    vec1=a.intersect(b=breast_hmec35_e028, wao=True).to_dataframe(disable_auto_names=True, header=None)
-    # print(vec1.groupby([0,1,2])[vec1.columns[-1]].apply(list))
-    # print(vec1.groupby([0,1,2]).agg({8:list,9:list}))
+#     counts=[]
+#     for index,row in df.iterrows():
+#         counts+=[[1 if str(x) in row["all_states"] else 0 for x in range(1,26) ]]
 
-    print(vec1.groupby([0,1,2])[8,9].agg(list))
-    tmp = vec1.groupby([0,1,2])[[8,9]].agg(list).reset_index()
-    tmp["len"] = tmp[2]-tmp[1]
-    print(tmp)
-    ratios=[]
-    for index,row in tmp.iterrows():
-        # if len(row[8])!=len(row[9]):
-        #     print("len wrong....")
-        tmp2=[]
-        for x in row[9]:
-            tmp2+=[x/row["len"]]
-        ratios+=[tmp2]
+#     df = pd.concat([df, pd.DataFrame(counts,columns=["state_"+str(x) for x in range(1,26)])],axis=1).drop("all_states",axis=1)
+#     # print("df.....",df)
 
-    print(ratios)
-    tmp["ratios"]=ratios
-    print(tmp)
+#     # print(pd.concat( [tmp_df.loc[:,0:numcols-1], pd.DataFrame(counts,columns=["state_"+str(x) for x in range(1,26)])],axis=1))
 
-    return
+#     return df
+
+
+# def add_chromatin_state_ratios(df):
+
+#     a = pybedtools.BedTool.from_dataframe(df).sort()
+#     numcols=len(df.columns)
+#     breast_hmec35_e028 = pybedtools.BedTool(breast_hmec35_e028_file).sort()
+#     breast_myo_e027 = pybedtools.BedTool(breast_myo_e027_file).sort()
+#     breast_hmec_e119 = pybedtools.BedTool(breast_hmec_e119_file).sort()
+#     vec1=a.intersect(b=breast_hmec35_e028, wao=True).to_dataframe(disable_auto_names=True, header=None)
+#     # print(vec1.groupby([0,1,2])[vec1.columns[-1]].apply(list))
+#     # print(vec1.groupby([0,1,2]).agg({8:list,9:list}))
+
+#     print(vec1.groupby([0,1,2])[8,9].agg(list))
+#     tmp = vec1.groupby([0,1,2])[[8,9]].agg(list).reset_index()
+#     tmp["len"] = tmp[2]-tmp[1]
+#     print(tmp)
+#     ratios=[]
+#     for index,row in tmp.iterrows():
+#         # if len(row[8])!=len(row[9]):
+#         #     print("len wrong....")
+#         tmp2=[]
+#         for x in row[9]:
+#             tmp2+=[x/row["len"]]
+#         ratios+=[tmp2]
+
+#     print(ratios)
+#     tmp["ratios"]=ratios
+#     print(tmp)
+
+#     return
 
 
 def add_chromatin_state_ratios2(df):
+    t0=time.time()
     ## trying to separate the state files initially to simplify the bedtools work....
     # statelist = ["state_"+str(x) for x in range(1,26)]
     a = pybedtools.BedTool.from_dataframe(df)#.sort() dont sort A files!
@@ -173,12 +174,17 @@ def add_chromatin_state_ratios2(df):
     ### add a column to df?
     for i in range(len(file_prefixes)):
         for j in range(1,26):
-            df[os.path.basename(file_prefixes[i])+".state"+str(j)] = a.coverage(b=file_prefixes[i]+".state"+str(j)+".bed").to_dataframe(disable_auto_names=True,header=None).iloc[:,-1:]
+            ### write these all to temp files as single arrays first to avoid memory fuck???
+            df[os.path.basename(file_prefixes[i])+".state"+str(j)] = a.coverage(b=file_prefixes[i]+".state"+str(j)+".bed").to_dataframe(disable_auto_names=True,
+                header=None,dtype={0:"str"}).iloc[:,-1:]
+    print("add chrom states time in seconds:",time.time()-t0)
 
     return df
 
 ## add distance and coverage
 def add_3utr_distance(df):
+
+    t0=time.time()
     
     three_utr = pybedtools.BedTool(three_utr_file)
     a = pybedtools.BedTool.from_dataframe(df)
@@ -189,6 +195,7 @@ def add_3utr_distance(df):
     windows_utrs = a.coverage(three_utr)
     windows_utrs_df = windows_utrs.to_dataframe(disable_auto_names=True,header=None)
     df["fraction_three_utr"] = windows_utrs_df[windows_utrs_df.columns[-1]].tolist()
+    print("add 3utr time in seconds:",time.time()-t0)
 
     return df
 
@@ -205,7 +212,6 @@ def add_5utr_distance(df):
     
     
     return df
-
 
 def add_intron_distance(df):
     
@@ -250,10 +256,17 @@ def add_whole_coding_gene_distance(df):
 
 def remove_reals(df_sims, df_reals):
 
+
+    t0=time.time()
+
     reals = pybedtools.BedTool.from_dataframe(df_reals)
     sims = pybedtools.BedTool.from_dataframe(df_sims)
     tmp = sims.closest(reals, d=True, t="first").to_dataframe(disable_auto_names=True, header=None)
     df_sims["dist_to_real"]=tmp[tmp.columns[-1]].tolist()
+
+    print("remove reals time in seconds:",time.time()-t0)
+
+
     return df_sims[df_sims["dist_to_real"]>0].drop("dist_to_real",axis=1).reset_index(drop=True)
 
 
@@ -302,19 +315,8 @@ def add_tss_distance(df):
 
 def clean_df(df,featurelist=None):
 
-
     df=df.rename(columns={0:"chrom", 1:"start", 2:"stop"})
-
     tmp = df.loc[:,featurelist]
-
-    # tmp.columns = ["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats",
-    #                         "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
-    #                         "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
-    #                         "intron_distance","fraction_introns","exon_distance","fraction_exons",'state_1', 
-    #                         'state_2', 'state_3', 'state_4', 'state_5', 'state_6', 'state_7', 'state_8', 'state_9',
-    #                          'state_10', 'state_11', 'state_12', 'state_13', 'state_14', 'state_15', 'state_16',
-    #                         'state_17', 'state_18', 'state_19', 'state_20', 'state_21', 'state_22', 'state_23', 'state_24', 'state_25']
-
     tmp = tmp[tmp["chrom"]!="Y"]
 
     return tmp.reset_index(drop=True)
@@ -361,13 +363,13 @@ def clean_df(df,featurelist=None):
 
 #     return tmp
 
-def sample_df(df,num):
+# def sample_df(df,num):
 
-    if num >= len(df.index):
-        print("ERROR: asking for fewer rows than exist in the data frame")
-        return 
+#     if num >= len(df.index):
+#         print("ERROR: asking for fewer rows than exist in the data frame")
+#         return 
 
-    return df.sample(n=num)
+#     return df.sample(n=num)
 
 
 def write_df(df):
@@ -608,6 +610,7 @@ windows = clean_df(
 
 
 ## probably have to loop this whole section to keep it from being a memory fuck
+## do chunks of 1,000 real windows with 100,000 simulated?
 simulated_windows = clean_df(
             add_mcf7_rt(
             add_chromatin_state_ratios2(
@@ -620,14 +623,15 @@ simulated_windows = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density(
-            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*20).sort()).to_dataframe(disable_auto_names=True, header=None),
+            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*10).sort()).to_dataframe(disable_auto_names=True, header=None),
                         df_reals=windows).reset_index(drop=True)))))))))))),featurelist=featurelist)
 
-
+# length*num = 500000000
 print(windows)
 ##############
 combined = pd.concat([windows,simulated_windows])
 ###
+t0=time.time()
 
 combined["three_utr_distance"] = np.log2(combined["three_utr_distance"]+1)
 combined["five_utr_distance"] = np.log2(combined["five_utr_distance"]+1)
@@ -635,15 +639,20 @@ combined["whole_coding_gene_distance"] = np.log2(combined["whole_coding_gene_dis
 combined["tss_distance"] = np.log2(combined["tss_distance"]+1)
 combined["exon_distance"] = np.log2(combined["exon_distance"]+1)
 combined["intron_distance"] = np.log2(combined["intron_distance"]+1)
+print("convert everything to log space seconds",time.time()-t0)
 
+
+## corr plot
+# sns.heatmap(combined.loc[:,featurelist[3:]].corr(),cmap="RdBu_r",yticklabels=True,xticklabels=True)
+# plt.show()
 
 # combined.to_csv("testdf9.txt",sep="\t")
 
-## try scaling together
+## scaling together
+t0=time.time()
 combined_scaled = preprocessing.scale(combined.loc[:,featurelist[3:]].reset_index(drop=True)) # this removes chrom start stop
 dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:], Y=combined_scaled[len(windows):,:])
-
-
+print("scale and make dist mat seconds",time.time()-t0)
 
 # ###
 # ### testing faster KNN search algorithm
@@ -659,34 +668,34 @@ dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(
 
 ### jacobs version
 
-
-
-indices=fast_find_nearest_unique_neighbor(dist_mat)
+indices1=fast_find_nearest_unique_neighbor(dist_mat)
 
 # ####
 
 
 
-# # get indices of nearest euclidean neighbors.
-# # OLD VERSION BUT WORKS DONT DELETE
-# # this is memory efficient becuase youre not modifying the matrix
-# indices = []
-# ## slow (and dumb) algorithm. can definitely engineer this to be an order of magnitude faster
-# ## takes like 2 min for 12,000 rows sample with 90 something features
-# print("starting nearest neighbors")
-# for i in range(len(dist_mat)):
-#     closest = np.argmin(dist_mat[i])
-#     if closest not in indices:
-#         indices += [closest]
-#     else:
-#         index=1
-#         tmp_list=list(dist_mat[i]) 
-#         tmp_sorted = sorted(dist_mat[i])
-#         while closest in indices:
-#             closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows.
-#             index += 1
-#         indices += [closest]
+# get indices of nearest euclidean neighbors.
+# OLD VERSION BUT WORKS DONT DELETE
+# this is memory efficient becuase youre not modifying the matrix
+indices = []
+## slow (and dumb) algorithm. can definitely engineer this to be an order of magnitude faster
+## takes like 2 min for 12,000 rows sample with 90 something features
+print("starting nearest neighbors")
+for i in range(len(dist_mat)):
+    closest = np.argmin(dist_mat[i])
+    if closest not in indices:
+        indices += [closest]
+    else:
+        index=1
+        tmp_list=list(dist_mat[i]) 
+        tmp_sorted = sorted(dist_mat[i])
+        while closest in indices:
+            closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows.
+            index += 1
+        indices += [closest]
 # ####
+
+print("indices compare", indices1,indices)
 
 #######
 # get index of Y with lowest distance
@@ -709,12 +718,12 @@ if arguments.make_plots:
     ax[1].scatter(dat_tsne_test[indices_added,0],dat_tsne_test[indices_added,1],s=20,lw=0.5,edgecolor="black",c="blue")
     ax[2].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c="red")
 
-    ax[0].set_xlim([-80,80])
-    ax[0].set_ylim([-80,80])
-    ax[1].set_xlim([-80,80])
-    ax[1].set_ylim([-80,80])
-    ax[2].set_xlim([-80,80])
-    ax[2].set_ylim([-80,80])
+    # ax[0].set_xlim([-20,20])
+    # ax[0].set_ylim([-20,20])
+    # ax[1].set_xlim([-20,20])
+    # ax[1].set_ylim([-20,20])
+    # ax[2].set_xlim([-20,20])
+    # ax[2].set_ylim([-20,20])
     ax[0].grid()
     ax[1].grid()
     ax[2].grid()
@@ -729,7 +738,7 @@ if arguments.make_plots:
 
     ###
 
-    fig,ax=subplots(2,)
+    fig,ax=subplots(2,39)
     ###
     ## TSNE TSNE TSNE
 
