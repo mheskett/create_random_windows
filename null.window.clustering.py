@@ -12,6 +12,7 @@ from sklearn.manifold import TSNE
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn import preprocessing
 from sklearn.decomposition import PCA
+from numba import njit
 
 ### all files needed
 tss_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.ensemble.tss.coding.stranded.final.nochr.unique.bed"
@@ -32,12 +33,63 @@ exons_file = "/Users/heskett/breast.fragile.sites/reference_files/ucsc.refseq.al
 breast_hmec35_e028_file = "/Users/heskett/breast.fragile.sites/roadmap.statemodels/E028_25_imputed12marks_stateno.bed"
 breast_myo_e027_file ="/Users/heskett/breast.fragile.sites/roadmap.statemodels/E027_25_imputed12marks_stateno.bed"
 breast_hmec_e119_file =  "/Users/heskett/breast.fragile.sites/roadmap.statemodels/E119_25_imputed12marks_stateno.bed"
-
+##
+mcf7_rt_file = "/Users/heskett/breast.fragile.sites/mcf7.pseudo.el.log2rt.bed"
 ###
 
 ### 
 
 ## dist AND coverage for UTRs, exons, introns, <---(non specific if coding or noncoding), and then whole coding gene cov and dist
+
+
+# def add_mcf7_rt(df):
+#     # print(df)
+#     a = pybedtools.BedTool.from_dataframe(df)
+#     rt = pybedtools.BedTool(mcf7_rt_file).sort()
+#     # print(rt)
+#     windows_rt = a.intersect(b=rt,wao=True)
+#     windows_rt_df = windows_rt.to_dataframe(disable_auto_names=True,header=None)
+
+#     print("len overlap",windows_rt_df)
+#     print(len(df))
+#     df["rt_vals"] = windows_rt_df.groupby([0,1,2])[windows_rt_df.columns[-2]].apply(list).tolist()
+#     # print("length big list",len(windows_rt_df.groupby([0,1,2])[windows_rt_df.columns[-2]].apply(list).tolist()))
+#     # print(len(df))
+#     ## filter
+#     mask = df.rt_vals.apply(lambda x: '.' not in x)
+#     df = df[mask]
+#     ###
+#     df["mean_rt"] = [sum([float(y) for y in x])/len(x) for x in df.loc[:,"rt_vals"]]
+#     return df.drop("rt_vals",axis=1)
+
+@njit('int32[:](float64[:, :])')
+def fast_find_nearest_unique_neighbor(XY):
+    selected = np.zeros(XY.shape[1], dtype='int8')
+    neighbors = np.zeros(XY.shape[0], dtype='int32')
+
+    for i in range(XY.shape[0]):
+        print(i)
+        x_min = 9999
+        x_argmin = -1
+        for j in range(XY.shape[1]):
+            if XY[i, j] < x_min and selected[j] == 0:
+                x_min = XY[i, j]
+                x_argmin = j
+
+        selected[x_argmin] = 1
+        neighbors[i] = x_argmin
+
+    return neighbors
+
+
+def add_mcf7_rt(df):
+    a = pybedtools.BedTool.from_dataframe(df)
+    rt = pybedtools.BedTool(mcf7_rt_file).sort()
+    windows_rt = a.map(b=rt,o="mean",c=4)
+    windows_rt_df = windows_rt.to_dataframe(disable_auto_names=True,header=None)
+    df["mean_rt"] = windows_rt_df[windows_rt_df.columns[-1]]
+
+    return df[df["mean_rt"]!="."]
 
 
 def add_chromatin_states(df):
@@ -267,47 +319,47 @@ def clean_df(df,featurelist=None):
 
     return tmp.reset_index(drop=True)
 
-def filter_df(df, snps_min=0,
-                snps_max=100,
-                percent_gc_min=0,
-                percent_gc_max=1,
-                fraction_repeats_min=0,
-                fraction_repeats_max=1,
-                fraction_within_coding_genes_min=0,
-                fraction_within_coding_genes_max=1,
-                min_tss_dist=0,
-                max_tss_dist=3*10**9):
+# def filter_df(df, snps_min=0,
+#                 snps_max=100,
+#                 percent_gc_min=0,
+#                 percent_gc_max=1,
+#                 fraction_repeats_min=0,
+#                 fraction_repeats_max=1,
+#                 fraction_within_coding_genes_min=0,
+#                 fraction_within_coding_genes_max=1,
+#                 min_tss_dist=0,
+#                 max_tss_dist=3*10**9):
 
-    if snps_min > snps_max:
-        print("error in snps argument")
-        return
-    if percent_gc_min > percent_gc_max:
-        print("error in gc argument")
-        return
-    if fraction_repeats_min > fraction_repeats_max:
-        print("error in repeats argument")
-        return
-    if fraction_within_coding_genes_min > fraction_within_coding_genes_max:
-        print("error in coding genes argument")
-        return
+#     if snps_min > snps_max:
+#         print("error in snps argument")
+#         return
+#     if percent_gc_min > percent_gc_max:
+#         print("error in gc argument")
+#         return
+#     if fraction_repeats_min > fraction_repeats_max:
+#         print("error in repeats argument")
+#         return
+#     if fraction_within_coding_genes_min > fraction_within_coding_genes_max:
+#         print("error in coding genes argument")
+#         return
 
-    print("before filtering")
-    print(df)
-    tmp = df[(df["snps_per_kb"].astype(float) >= snps_min) & 
-            (df["snps_per_kb"].astype(float) <= snps_max) & 
-            (df["percent_gc"].astype(float) >= percent_gc_min) & 
-            (df["percent_gc"].astype(float) <= percent_gc_max) &
-            (df["fraction_repeats"].astype(float) >= fraction_repeats_min) &
-            (df["fraction_repeats"].astype(float) <= fraction_repeats_max) &
-            (df["fraction_within_coding_genes"].astype(float) >= fraction_within_coding_genes_min) & 
-            (df["fraction_within_coding_genes"].astype(float) <= fraction_within_coding_genes_max) &
-            (df["tss_distance"].astype(float) >= min_tss_dist) &
-            (df["tss_distance"].astype(float) <= max_tss_dist)]
+#     print("before filtering")
+#     print(df)
+#     tmp = df[(df["snps_per_kb"].astype(float) >= snps_min) & 
+#             (df["snps_per_kb"].astype(float) <= snps_max) & 
+#             (df["percent_gc"].astype(float) >= percent_gc_min) & 
+#             (df["percent_gc"].astype(float) <= percent_gc_max) &
+#             (df["fraction_repeats"].astype(float) >= fraction_repeats_min) &
+#             (df["fraction_repeats"].astype(float) <= fraction_repeats_max) &
+#             (df["fraction_within_coding_genes"].astype(float) >= fraction_within_coding_genes_min) & 
+#             (df["fraction_within_coding_genes"].astype(float) <= fraction_within_coding_genes_max) &
+#             (df["tss_distance"].astype(float) >= min_tss_dist) &
+#             (df["tss_distance"].astype(float) <= max_tss_dist)]
 
-    print("after filtering")
-    print(tmp)
+#     print("after filtering")
+#     print(tmp)
 
-    return tmp
+#     return tmp
 
 def sample_df(df,num):
 
@@ -516,13 +568,15 @@ windows_file_df = pd.read_csv(arguments.bed,sep="\t", header=None)
 median_length = (windows_file_df[2] - windows_file_df[1]).median()
 number = len(windows_file_df)
 
+# print(add_mcf7_rt(windows_file.sort().to_dataframe(disable_auto_names=True, header=None)))
+# exit()
 ## make feature string for cell lines
 #######
 file_prefixes=[breast_hmec35_e028_file,breast_myo_e027_file,breast_hmec_e119_file]
 featurelist=["chrom","start","stop","snps_per_kb","percent_gc","fraction_repeats",
                             "three_utr_distance","fraction_three_utr","five_utr_distance","fraction_five_utr",
                             "whole_coding_gene_distance","fraction_whole_coding_gene_distance","tss_distance",
-                            "intron_distance","fraction_introns","exon_distance","fraction_exons"]
+                            "intron_distance","fraction_introns","exon_distance","fraction_exons","mean_rt"]
 for i in range(len(file_prefixes)):
     for j in range(1,26):
         featurelist+= [os.path.basename(file_prefixes[i])+".state"+str(j)]
@@ -535,6 +589,7 @@ for i in range(len(file_prefixes)):
 ##testing
 # windows_file = pybedtools.BedTool("amplicon_segments_project7_ecDNA_positive.bed")
 windows = clean_df(
+            add_mcf7_rt(
             add_chromatin_state_ratios2(
             add_exon_distance(
             add_tss_distance(
@@ -545,13 +600,16 @@ windows = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density( # add common snp return NANs
-            remove_blacklist(windows_file.sort()).to_dataframe(disable_auto_names=True, header=None))))))))))),featurelist=featurelist)
+            remove_blacklist(windows_file.sort()).to_dataframe(disable_auto_names=True, header=None)))))))))))),featurelist=featurelist)
 
 # print("windows",windows)
 # print('debug',add_gc(add_common_snp_density(remove_reals(df_sims=remove_blacklist(random_windows(470,100000).sort()).to_dataframe(disable_auto_names=True, header=None),
 #                         df_reals=windows))))
 
+
+## probably have to loop this whole section to keep it from being a memory fuck
 simulated_windows = clean_df(
+            add_mcf7_rt(
             add_chromatin_state_ratios2(
             add_exon_distance(
             add_tss_distance(
@@ -562,8 +620,8 @@ simulated_windows = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density(
-            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*5).sort()).to_dataframe(disable_auto_names=True, header=None),
-                        df_reals=windows).reset_index(drop=True))))))))))),featurelist=featurelist)
+            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*20).sort()).to_dataframe(disable_auto_names=True, header=None),
+                        df_reals=windows).reset_index(drop=True)))))))))))),featurelist=featurelist)
 
 
 print(windows)
@@ -586,27 +644,51 @@ combined_scaled = preprocessing.scale(combined.loc[:,featurelist[3:]].reset_inde
 dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:], Y=combined_scaled[len(windows):,:])
 
 
-# get indices of nearest euclidean neighbors.
-indices = []
-## slow algorithm. can definitely engineer this to be an order of magnitude faster
-## takes like 2 min for 12,000 rows sample with 90 something features
-print("starting nearest neighbors")
-for i in range(len(dist_mat)):
-    # print(i)
-    closest = np.argmin(dist_mat[i])
-    if closest not in indices:
-        indices += [closest]
-        # print("added first closest")
-    else:
-        index=1
-        tmp_list=list(dist_mat[i]) # im sure theres a numpy implement of this which would be faster
-        tmp_sorted = sorted(dist_mat[i]) # numpy implement of this would be faster
-        while closest in indices:
-            closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows. # again numpy implement of index
-            index += 1
-            # print(index)
-        indices += [closest]
 
+# ###
+# ### testing faster KNN search algorithm
+# print("starting knn search")
+# indices = []
+# ## blazing fast BUT its a memory fuck once you get to bigger matrices
+# dist_mat_copy = np.copy(dist_mat)
+# for i in range(len(dist_mat_copy)):
+#     print(i)
+#     closest = np.argmin(dist_mat_copy[i])
+#     indices += [closest]
+#     dist_mat_copy[:,closest] = 1000
+
+### jacobs version
+
+
+
+indices=fast_find_nearest_unique_neighbor(dist_mat)
+
+# ####
+
+
+
+# # get indices of nearest euclidean neighbors.
+# # OLD VERSION BUT WORKS DONT DELETE
+# # this is memory efficient becuase youre not modifying the matrix
+# indices = []
+# ## slow (and dumb) algorithm. can definitely engineer this to be an order of magnitude faster
+# ## takes like 2 min for 12,000 rows sample with 90 something features
+# print("starting nearest neighbors")
+# for i in range(len(dist_mat)):
+#     closest = np.argmin(dist_mat[i])
+#     if closest not in indices:
+#         indices += [closest]
+#     else:
+#         index=1
+#         tmp_list=list(dist_mat[i]) 
+#         tmp_sorted = sorted(dist_mat[i])
+#         while closest in indices:
+#             closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows.
+#             index += 1
+#         indices += [closest]
+# ####
+
+#######
 # get index of Y with lowest distance
 indices_added = [x+len(windows) for  x in indices]
 simulated_windows.loc[indices,:].to_csv(arguments.out_file,sep="\t",header=None,index=None)
@@ -645,7 +727,9 @@ if arguments.make_plots:
     plt.close()
     ######
 
+    ###
 
+    fig,ax=subplots(2,)
     ###
     ## TSNE TSNE TSNE
 
