@@ -735,7 +735,7 @@ print("convert everything to log space seconds",time.time()-t0)
 t0=time.time()
 combined_scaled = np.float32(preprocessing.scale(combined.loc[:,featurelist[3:]].reset_index(drop=True))) # this removes chrom start stop
 print(combined_scaled)
-dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:], Y=combined_scaled[len(windows):,:])
+# dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:], Y=combined_scaled[len(windows):,:])
 print("scale and make dist mat seconds",time.time()-t0)
 
 ###################
@@ -781,10 +781,10 @@ print("testing jacob")
 #     dist_mat_copy[:,closest] = 1000
 
 ### jacobs version
-indices1=fast_function2(X=combined_scaled[0:len(windows),:].copy(),Y=combined_scaled[len(windows):,:].T.copy())
-indices=fast_find_nearest_unique_neighbor(dist_mat)
-print(indices1)
-print(indices)
+indices=fast_function2(X=combined_scaled[0:len(windows),:].copy(),Y=combined_scaled[len(windows):,:].T.copy())
+# indices=fast_find_nearest_unique_neighbor(dist_mat)
+# print(indices1)
+# print(indices)
 # ####
 
 
