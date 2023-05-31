@@ -14,6 +14,7 @@ from multiprocessing import Pool
 from multiprocessing import cpu_count
 
 
+
 def call_clustering(args):
 
 	## hard coded: args[0] is bed file. arg[1] is out file
@@ -37,6 +38,11 @@ if __name__ == "__main__":
 		metavar="[bed file input. no header.]",
 		required=False,
 		help="bed file 2")
+	parser.add_argument("--out_file",
+		type=str,
+		metavar="[out file to write stats]",
+		required=False,
+		help="out file to write stats")	
 	arguments = parser.parse_args()
 	
 
@@ -60,7 +66,9 @@ if __name__ == "__main__":
 
 	real_intersections_per_mb = len(real_a_intersect_b) / real_total_bases * 10**6
 
-	print(real_intersections_per_mb)
+	with open(arguments.out_file, "w") as myfile:
+	    myfile.write("Intersections per Mb between A and B: "+str(real_intersections_per_mb)+"\n")
+	# print(real_intersections_per_mb)
 
 ####
 
@@ -70,9 +78,9 @@ if __name__ == "__main__":
 	data = [[arguments.a_bed,"colocalization_windows_a_tmp_"+str(x)+".bed"] for x in range(num_iterations)] + \
 			[[arguments.b_bed,"colocalization_windows_b_tmp_"+str(x)+".bed"] for x in range(num_iterations)]
 
-	print(data)
+	# print(data)
 	print(cpu_count())
-	processes = 8
+	processes = 6
 	with Pool(processes) as pool:
 	    pool.map(call_clustering, data)
 	#####
@@ -90,6 +98,7 @@ if __name__ == "__main__":
 
 	intersections_per_mb=[]
 	for i in range(num_iterations):
+		rand_num = random.randint(1,10000)
 		simulated_windows = [pybedtools.BedTool("colocalization_windows_a_tmp_" + str(i) + ".bed"),
 							pybedtools.BedTool("colocalization_windows_b_tmp_" + str(i) + ".bed")]
 		simulated_dfs = [pybedtools.BedTool("colocalization_windows_a_tmp_" + str(i) + ".bed").to_dataframe(disable_auto_names=True, header=None),
@@ -99,15 +108,22 @@ if __name__ == "__main__":
 		num_intersections = len(a_intersect_b)
 		total_bases =  (simulated_dfs[0][2]-simulated_dfs[0][1]).sum() + (simulated_dfs[1][2]-simulated_dfs[1][1]).sum()
 		intersections_per_mb += [num_intersections / total_bases * 10**6]
-		print("intersections per Mb: " + str(num_intersections / total_bases * 10**6))
+		with open(arguments.out_file, "a") as myfile:
+		    myfile.write("intersections per Mb simulated round " +str(i) +": "+ str(num_intersections / total_bases * 10**6)+"\n")
+		# print("intersections per Mb: " + str(num_intersections / total_bases * 10**6))
 
-	sns.kdeplot(intersections_per_mb,cut=0)
-	plt.show()
+	# sns.kdeplot(intersections_per_mb,cut=0)
+	# plt.show()
 
 
 
 	zscore = statistics.NormalDist(mu = np.array(intersections_per_mb).mean(), 
 									sigma = np.array(intersections_per_mb).std()).zscore(real_intersections_per_mb)
-	print("z score of real intersections per mb compared to simulated: "+ str(zscore))
-	print("mean of intersections per mb fake " + str(np.array(intersections_per_mb).mean()))
-	print("std of intersections per mb fake " + str(np.array(intersections_per_mb).std()))
+
+	with open(arguments.out_file, "a") as myfile:
+		myfile.write("z score of real intersections per mb compared to simulated: "+ str(zscore)+"\n")
+		myfile.write("mean of intersections per mb fake " + str(np.array(intersections_per_mb).mean())+"\n")
+		myfile.write("std of intersections per mb fake " + str(np.array(intersections_per_mb).std()))
+	# print("z score of real intersections per mb compared to simulated: "+ str(zscore))
+	# print("mean of intersections per mb fake " + str(np.array(intersections_per_mb).mean()))
+	# print("std of intersections per mb fake " + str(np.array(intersections_per_mb).std()))
