@@ -41,7 +41,54 @@ mcf7_rt_file = "/Users/heskett/breast.fragile.sites/mcf7.pseudo.el.log2rt.bed"
 ### 
 
 ## dist AND coverage for UTRs, exons, introns, <---(non specific if coding or noncoding), and then whole coding gene cov and dist
+@njit
+def fast_function(X, Y):
+    selected = np.zeros(Y.shape[0],dtype="int8")
+    neighbors = np.zeros(X.shape[0], dtype='int32')
 
+    for i in range(X.shape[0]):
+        print(i)
+        x_min = 9999
+        x_argmin = -1
+        
+        distances = (X[i] ** 2).sum() + (Y ** 2).sum(axis=1) - 2*X[i].dot(Y.T) # check to make sure this is right
+        for j in range(len(distances)):
+            if selected[j] == 1:
+                continue
+
+            if distances[j] < x_min:
+                x_min = distances[j]
+                x_argmin = j
+        
+        selected[x_argmin] = 1
+        neighbors[i] = x_argmin
+
+    return neighbors
+
+
+@njit
+def fast_function2(X, Y):
+    selected = np.zeros(Y.shape[0],dtype="int8")
+    neighbors = np.zeros(X.shape[0], dtype='int32')
+
+    for i in range(X.shape[0]):
+        print(i)
+        x_min = 9999
+        x_argmin = -1
+        
+        distances = (X[i] ** 2).sum() +  (Y ** 2).sum(axis=0) - 2*X[i].dot(Y) # check to make sure this is right
+        for j in range(len(distances)):
+            if selected[j] == 1:
+                continue
+
+            if distances[j] < x_min:
+                x_min = distances[j]
+                x_argmin = j
+        
+        selected[x_argmin] = 1
+        neighbors[i] = x_argmin
+
+    return neighbors
 
 # def add_mcf7_rt(df):
 #     # print(df)
@@ -63,7 +110,7 @@ mcf7_rt_file = "/Users/heskett/breast.fragile.sites/mcf7.pseudo.el.log2rt.bed"
 #     df["mean_rt"] = [sum([float(y) for y in x])/len(x) for x in df.loc[:,"rt_vals"]]
 #     return df.drop("rt_vals",axis=1)
 
-@njit('int32[:](float64[:, :])')
+@njit('int32[:](float32[:, :])')
 def fast_find_nearest_unique_neighbor(XY):
     selected = np.zeros(XY.shape[1], dtype='int8')
     neighbors = np.zeros(XY.shape[0], dtype='int32')
@@ -76,6 +123,29 @@ def fast_find_nearest_unique_neighbor(XY):
                 x_min = XY[i, j]
                 x_argmin = j
 
+        selected[x_argmin] = 1
+        neighbors[i] = x_argmin
+
+    return neighbors
+
+
+@njit
+def slow_speed_low_mem_nearest_unique_neighbor(X,Y):
+    selected = np.zeros(Y.shape[0],dtype="int8")
+    neighbors = np.zeros(X.shape[0], dtype='int32')
+    for i in range(X.shape[0]):
+        # print(i)
+        ## this makes a distance matrix with X rows and Y columns
+        ## have to write this code manually
+        distances = sklearn.metrics.pairwise.euclidean_distances(X[[i],:], Y)
+        # distances = np.sqrt(np.dot(x, x) - 2 * np.dot(x, y) + np.dot(y, y))
+
+        x_min = 9999
+        x_argmin = -1
+        for j in range(distances.shape[1]):
+            if distances[0, j] < x_min and selected[j] == 0:
+                x_min = distances[0, j]
+                x_argmin = j
         selected[x_argmin] = 1
         neighbors[i] = x_argmin
 
@@ -172,14 +242,27 @@ def add_chromatin_state_ratios2(df):
     numcols=len(df.columns)
     file_prefixes=[breast_hmec35_e028_file,breast_myo_e027_file,breast_hmec_e119_file]
     ### add a column to df?
+    tmp=[]
+    names=[]
     for i in range(len(file_prefixes)):
         for j in range(1,26):
-            ### write these all to temp files as single arrays first to avoid memory fuck???
-            df[os.path.basename(file_prefixes[i])+".state"+str(j)] = a.coverage(b=file_prefixes[i]+".state"+str(j)+".bed").to_dataframe(disable_auto_names=True,
-                header=None,dtype={0:"str"}).iloc[:,-1:]
+            ### write these all to temp files as single arrays, then paste together the files and reload as single DF???
+            ### first try just storing them in a list, and then concatting at the end instead of doing the df["column"]=thing syntax.
+            tmp+=[a.coverage(b=file_prefixes[i]+".state"+str(j)+".bed").to_dataframe(disable_auto_names=True,
+                header=None,dtype={0:"str"}).iloc[:,-1:]]
+            names+=[os.path.basename(file_prefixes[i])+".state"+str(j)]
+            # df[os.path.basename(file_prefixes[i])+".state"+str(j)] = a.coverage(b=file_prefixes[i]+".state"+str(j)+".bed").to_dataframe(disable_auto_names=True,
+            #     header=None,dtype={0:"str"}).iloc[:,-1:]
+    final = pd.concat([df]+tmp,axis=1)
+
+    final.columns = list(df.columns) + list(names)
+    print(final)
+
+    # print(pd.concat([df]+tmp))
+    # print(pd.concat(tmp))
     print("add chrom states time in seconds:",time.time()-t0)
 
-    return df
+    return final
 
 ## add distance and coverage
 def add_3utr_distance(df):
@@ -623,7 +706,7 @@ simulated_windows = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density(
-            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*10).sort()).to_dataframe(disable_auto_names=True, header=None),
+            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*5).sort()).to_dataframe(disable_auto_names=True, header=None),
                         df_reals=windows).reset_index(drop=True)))))))))))),featurelist=featurelist)
 
 # length*num = 500000000
@@ -650,9 +733,40 @@ print("convert everything to log space seconds",time.time()-t0)
 
 ## scaling together
 t0=time.time()
-combined_scaled = preprocessing.scale(combined.loc[:,featurelist[3:]].reset_index(drop=True)) # this removes chrom start stop
+combined_scaled = np.float32(preprocessing.scale(combined.loc[:,featurelist[3:]].reset_index(drop=True))) # this removes chrom start stop
+print(combined_scaled)
 dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:], Y=combined_scaled[len(windows):,:])
 print("scale and make dist mat seconds",time.time()-t0)
+
+###################
+#### testing chunkwise
+# print("starting chunkwise")
+# X=combined_scaled[0:len(windows),:]
+# Y=combined_scaled[len(windows):,:]
+print("testing jacob")
+# print(fast_function(X,Y))
+# print(fast_function2(X,Y.T.copy()))
+
+# print(slow_speed_low_mem_nearest_unique_neighbor(X,Y))
+
+# selected = np.zeros(Y.shape[0],dtype="int8")
+# neighbors = np.zeros(X.shape[0], dtype='int32')
+# for i in range(X.shape[0]):
+#     # print(i)
+#     ## this makes a distance matrix with X rows and Y columns
+#     distances = sklearn.metrics.pairwise.euclidean_distances(X[[i],:], Y)
+#     x_min = 9999
+#     x_argmin = -1
+#     for j in range(distances.shape[1]):
+#         if distances[0, j] < x_min and selected[j] == 0:
+#             x_min = distances[0, j]
+#             x_argmin = j
+#     selected[x_argmin] = 1
+#     neighbors[i] = x_argmin
+# print("ending chunkwise")
+  
+###########
+
 
 # ###
 # ### testing faster KNN search algorithm
@@ -667,53 +781,60 @@ print("scale and make dist mat seconds",time.time()-t0)
 #     dist_mat_copy[:,closest] = 1000
 
 ### jacobs version
-
-indices1=fast_find_nearest_unique_neighbor(dist_mat)
-
+indices1=fast_function2(X=combined_scaled[0:len(windows),:].copy(),Y=combined_scaled[len(windows):,:].T.copy())
+indices=fast_find_nearest_unique_neighbor(dist_mat)
+print(indices1)
+print(indices)
 # ####
 
 
 
 # get indices of nearest euclidean neighbors.
 # OLD VERSION BUT WORKS DONT DELETE
-# this is memory efficient becuase youre not modifying the matrix
-indices = []
-## slow (and dumb) algorithm. can definitely engineer this to be an order of magnitude faster
-## takes like 2 min for 12,000 rows sample with 90 something features
-print("starting nearest neighbors")
-for i in range(len(dist_mat)):
-    closest = np.argmin(dist_mat[i])
-    if closest not in indices:
-        indices += [closest]
-    else:
-        index=1
-        tmp_list=list(dist_mat[i]) 
-        tmp_sorted = sorted(dist_mat[i])
-        while closest in indices:
-            closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows.
-            index += 1
-        indices += [closest]
-# ####
+# # this is memory efficient becuase youre not modifying the matrix
+# indices = []
+# ## slow (and dumb) algorithm. can definitely engineer this to be an order of magnitude faster
+# ## takes like 2 min for 12,000 rows sample with 90 something features
+# print("starting nearest neighbors")
+# for i in range(len(dist_mat)):
+#     closest = np.argmin(dist_mat[i])
+#     if closest not in indices:
+#         indices += [closest]
+#     else:
+#         index=1
+#         tmp_list=list(dist_mat[i]) 
+#         tmp_sorted = sorted(dist_mat[i])
+#         while closest in indices:
+#             closest = tmp_list.index(tmp_sorted[index]) # this can go out of range if too few sim windows.
+#             index += 1
+#         indices += [closest]
+# # ####
 
-print("indices compare", indices1,indices)
+# print("indices compare", indices1,indices)
 
 #######
 # get index of Y with lowest distance
 indices_added = [x+len(windows) for  x in indices]
 simulated_windows.loc[indices,:].to_csv(arguments.out_file,sep="\t",header=None,index=None)
 
+# for i in range(len(indices)):
+#     print(dist_mat[i,indices[i]])
+
+# plt.scatter(range(dist_mat.shape[0]),[dist_mat[x,indices[x]] for x in range(dist_mat.shape[0])])
+# plt.show()
 
 if arguments.make_plots:
     print("starting tsne")
 #####
-    tsne=TSNE(n_components=2) # does not scale. slow
+    # tsne=TSNE(n_components=2) # does not scale. slow
     # tsne taking forever
     tsne=PCA(n_components=2)
+    print("line1")
     dat_tsne_test = tsne.fit_transform(combined_scaled)
-
 
     #####
     fig,ax = plt.subplots(1,3)
+    print("line2")
     ax[0].scatter(dat_tsne_test[:,0],dat_tsne_test[:,1],s=20,lw=0.5,edgecolor="black",c="blue")
     ax[1].scatter(dat_tsne_test[indices_added,0],dat_tsne_test[indices_added,1],s=20,lw=0.5,edgecolor="black",c="blue")
     ax[2].scatter(dat_tsne_test[0:len(windows),0],dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c="red")
@@ -735,10 +856,20 @@ if arguments.make_plots:
     plt.show()
     plt.close()
     ######
+    colnames = featurelist[3:]
+    ncols = combined_scaled.shape[1]
+    fig,ax=plt.subplots(1,ncols,figsize=(150,2))
+    for i in range(ncols):
+        ax[i].scatter(dat_tsne_test[0:len(windows),0],
+                    dat_tsne_test[0:len(windows),1],s=20,lw=0.5,edgecolor="black",c=combined_scaled[0:len(windows),i],cmap="Reds")
+        ax[i].set_title(colnames[i],fontdict={"fontsize":5})
+
+    plt.savefig("test999.jpg",dpi=150)
+    # plt.show()
+    plt.close()
 
     ###
 
-    fig,ax=subplots(2,39)
     ###
     ## TSNE TSNE TSNE
 
