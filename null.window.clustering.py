@@ -66,13 +66,14 @@ def fast_function(X, Y):
     return neighbors
 
 
+# @njit('int32[:](float32[:,:],float32[:,:])')
 @njit
 def fast_function2(X, Y):
-    selected = np.zeros(Y.shape[0],dtype="int8")
+    selected = np.zeros(Y.shape[1],dtype="int8")
     neighbors = np.zeros(X.shape[0], dtype='int32')
 
     for i in range(X.shape[0]):
-        print(i)
+        # print(i)
         x_min = 9999
         x_argmin = -1
         
@@ -706,7 +707,7 @@ simulated_windows = clean_df(
             add_fraction_repeats(
             add_gc(
             add_common_snp_density(
-            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*5).sort()).to_dataframe(disable_auto_names=True, header=None),
+            remove_reals(df_sims=remove_blacklist(random_windows(median_length,number*10).sort()).to_dataframe(disable_auto_names=True, header=None),
                         df_reals=windows).reset_index(drop=True)))))))))))),featurelist=featurelist)
 
 # length*num = 500000000
@@ -733,8 +734,9 @@ print("convert everything to log space seconds",time.time()-t0)
 
 ## scaling together
 t0=time.time()
-combined_scaled = np.float32(preprocessing.scale(combined.loc[:,featurelist[3:]].reset_index(drop=True))) # this removes chrom start stop
-print(combined_scaled)
+combined_scaled = np.float32(preprocessing.scale(combined.loc[:,featurelist[3:]]))#.reset_index(drop=True))) # this removes chrom start stop
+print(combined_scaled.shape)
+# exit()
 # dist_mat = sklearn.metrics.pairwise.euclidean_distances(X=combined_scaled[0:len(windows),:], Y=combined_scaled[len(windows):,:])
 print("scale and make dist mat seconds",time.time()-t0)
 
@@ -823,13 +825,16 @@ simulated_windows.loc[indices,:].to_csv(arguments.out_file,sep="\t",header=None,
 # plt.scatter(range(dist_mat.shape[0]),[dist_mat[x,indices[x]] for x in range(dist_mat.shape[0])])
 # plt.show()
 
+
+print("done")
+# exit()
 if arguments.make_plots:
     print("starting tsne")
 #####
     # tsne=TSNE(n_components=2) # does not scale. slow
     # tsne taking forever
     tsne=PCA(n_components=2)
-    print("line1")
+    print("line1 malloc error here wth numba")
     dat_tsne_test = tsne.fit_transform(combined_scaled)
 
     #####
@@ -853,8 +858,8 @@ if arguments.make_plots:
     ax[2].set_title("Real binding sites")
 
 
-    plt.show()
-    plt.close()
+    # plt.show()
+    # plt.close()
     ######
     colnames = featurelist[3:]
     ncols = combined_scaled.shape[1]
